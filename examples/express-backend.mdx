@@ -1,0 +1,228 @@
+---
+title: Express Backend Example
+description: Complete Express.js backend setup with NAVAI voice integration
+---
+
+This example demonstrates a production-ready Express backend with NAVAI voice capabilities, CORS configuration, and error handling.
+
+## Project Structure
+
+```
+playground-api/
+├── src/
+│   └── server.ts          # Main Express server
+├── package.json
+├── tsconfig.json
+└── .env                   # Environment variables
+```
+
+## Complete Server Implementation
+
+This is the complete `server.ts` file from the playground-api app:
+
+```typescript
+import cors from "cors";
+import "dotenv/config";
+import express, { type Request, type Response, type NextFunction } from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+
+// Parse CORS origins from environment variable
+const configuredCorsOrigins = (process.env.NAVAI_CORS_ORIGIN ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const port = Number(process.env.PORT ?? "3000");
+
+// Helper to check if origin is localhost
+function isLocalOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Middleware
+app.use(express.json());
+app.use(
+  cors({
+    origin(origin, callback) {
+      // Allow requests with no origin (like mobile apps, curl)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      // Allow all origins if wildcard is configured
+      if (configuredCorsOrigins.includes("*")) {
+        callback(null, true);
+        return;
+      }
+
+      // Allow configured origins and localhost
+      if (configuredCorsOrigins.includes(origin) || isLocalOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    }
+  })
+);
+
+// Health check endpoint
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
+// Register NAVAI voice routes
+// This adds POST /voice/connect and other required endpoints
+registerNavaiExpressRoutes(app);
+
+// Global error handler
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const message = error instanceof Error ? error.message : "Unexpected error";
+  res.status(500).json({ error: message });
+});
+
+// Start server
+app.listen(port, () => {
+  console.log(`Playground API listening on http://localhost:${port}`);
+});
+```
+
+## Package Dependencies
+
+Here's the `package.json` configuration:
+
+```json
+{
+  "name": "@navai/playground-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsup src/server.ts --format esm --clean",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@navai/voice-backend": "^0.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
+```
+
+## Environment Configuration
+
+Create a `.env` file in your project root:
+
+```bash
+# Server port
+PORT=3000
+
+# CORS configuration
+# Use "*" for all origins (development only)
+# Or specify comma-separated origins: "http://localhost:5173,https://myapp.com"
+NAVAI_CORS_ORIGIN=*
+
+# OpenAI API key (required for voice agent)
+OPENAI_API_KEY=sk-...
+```
+
+## Running the Server
+
+### Development Mode
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server with hot reload
+npm run dev
+```
+
+The server will start on `http://localhost:3000`.
+
+### Production Build
+
+```bash
+# Build the project
+npm run build
+
+# Run the built server
+node dist/server.js
+```
+
+## Testing the Server
+
+### Health Check
+
+```bash
+curl http://localhost:3000/health
+# Response: {"ok":true}
+```
+
+### Verify NAVAI Routes
+
+The `registerNavaiExpressRoutes()` function adds the following endpoints:
+
+- `POST /voice/connect` - Establish voice connection
+- Additional WebRTC signaling routes
+
+You can verify these are registered by checking your server logs or testing with a frontend client.
+
+## Key Features
+
+### 1. Smart CORS Configuration
+
+The server includes flexible CORS handling that:
+- Allows all localhost origins automatically
+- Supports wildcard (`*`) for development
+- Accepts comma-separated allowed origins
+- Blocks unauthorized origins with clear error messages
+
+### 2. One-Line NAVAI Integration
+
+```typescript
+registerNavaiExpressRoutes(app);
+```
+
+This single function call adds all required voice endpoints to your Express app.
+
+### 3. Comprehensive Error Handling
+
+Global error middleware catches all errors and returns consistent JSON responses.
+
+### 4. TypeScript Support
+
+Full type safety with Express 5 types and TypeScript 5.7.
+
+## Next Steps
+
+- Learn about [custom functions](/guides/function-modules) to extend voice capabilities
+- Set up a [React frontend](/examples/react-app) to connect to this backend
+- Configure [route navigation](/guides/route-configuration) for your app
+
+## Related Documentation
+
+- [Backend Package Reference](/api/backend/overview)
+- [Environment Variables](/guides/environment-variables)
+- [Deployment Guide](/guides/backend-setup)

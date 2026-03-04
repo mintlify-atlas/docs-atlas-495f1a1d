@@ -1,0 +1,244 @@
+---
+title: "GET /navai/functions"
+description: "List all available backend functions that can be executed"
+---
+
+## Endpoint
+
+```
+GET /navai/functions
+```
+
+Returns a list of all backend functions discovered and loaded by the NAVAI runtime. These functions are dynamically discovered from your codebase based on `NAVAI_FUNCTIONS_FOLDERS` configuration.
+
+## Authentication
+
+No authentication required. This endpoint is public by default.
+
+## Request Headers
+
+No special headers required.
+
+## Query Parameters
+
+None.
+
+## Response
+
+<ResponseField name="items" type="array" required>
+  Array of function definitions available for execution
+  
+  <ResponseField name="items[].name" type="string" required>
+    Normalized function name in snake_case lowercase format
+  </ResponseField>
+  
+  <ResponseField name="items[].description" type="string" required>
+    Human-readable description of the function
+  </ResponseField>
+  
+  <ResponseField name="items[].source" type="string" required>
+    Source file path and export name in format `path/to/file.ts#exportName`
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="warnings" type="array" required>
+  Array of warning messages from runtime discovery and function loading. Empty if no issues occurred.
+</ResponseField>
+
+## Example Request
+
+```bash
+curl http://localhost:3000/navai/functions
+```
+
+## Example Response
+
+```json
+{
+  "items": [
+    {
+      "name": "secret_password",
+      "description": "Call exported function default.",
+      "source": "src/ai/functions-modules/security.ts#default"
+    },
+    {
+      "name": "get_weather",
+      "description": "Fetch current weather data for a location.",
+      "source": "src/ai/functions-modules/weather.ts#getWeather"
+    },
+    {
+      "name": "send_email",
+      "description": "Send an email notification.",
+      "source": "src/features/notifications/voice-functions/email.ts#sendEmail"
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Example Response with Warnings
+
+```json
+{
+  "items": [
+    {
+      "name": "example_function",
+      "description": "Call exported function default.",
+      "source": "src/ai/functions-modules/example.ts#default"
+    }
+  ],
+  "warnings": [
+    "Function name collision: 'getUser' already exists, renamed to 'get_user_2'",
+    "Configured folders matched nothing, falling back to default: src/ai/functions-modules"
+  ]
+}
+```
+
+## Error Responses
+
+### 500 - Runtime Loading Error
+
+```json
+{
+  "error": "Failed to load functions runtime: ..."
+}
+```
+
+Occurs when the function discovery or loading process encounters a fatal error.
+
+## Function Discovery
+
+Functions are discovered from directories specified in `NAVAI_FUNCTIONS_FOLDERS` environment variable or registration options.
+
+### Supported Folder Patterns
+
+- **Folder**: `src/ai/functions-modules`
+- **Recursive folder**: `src/ai/functions-modules/...`
+- **Wildcard**: `src/features/*/voice-functions`
+- **Explicit file**: `src/ai/functions-modules/security.ts`
+- **CSV list**: `src/ai/functions-modules,...`
+
+### Default Folder
+
+If no configuration is provided, defaults to `src/ai/functions-modules`.
+
+### Excluded Paths
+
+By default, these patterns are excluded:
+- `node_modules`
+- `dist`
+- Hidden files/folders (starting with `.`)
+- TypeScript declaration files (`*.d.ts`)
+
+## Export-to-Function Mapping
+
+The runtime transforms module exports into callable functions:
+
+### 1. Exported Function
+
+Creates one function tool.
+
+```typescript
+// src/ai/functions-modules/weather.ts
+export default function getWeather(location: string) {
+  return { temperature: 72, condition: "sunny" };
+}
+```
+
+Becomes:
+```json
+{
+  "name": "get_weather",
+  "source": "src/ai/functions-modules/weather.ts#default"
+}
+```
+
+### 2. Exported Class
+
+Creates one function per callable instance method.
+
+```typescript
+// src/ai/functions-modules/database.ts
+export class DatabaseClient {
+  query(sql: string) { /* ... */ }
+  insert(data: object) { /* ... */ }
+}
+```
+
+Becomes:
+```json
+[
+  {
+    "name": "database_client_query",
+    "source": "src/ai/functions-modules/database.ts#DatabaseClient.query"
+  },
+  {
+    "name": "database_client_insert",
+    "source": "src/ai/functions-modules/database.ts#DatabaseClient.insert"
+  }
+]
+```
+
+### 3. Exported Object
+
+Creates one function per callable member.
+
+```typescript
+// src/ai/functions-modules/utils.ts
+export const utils = {
+  formatDate: (date: Date) => { /* ... */ },
+  parseJson: (json: string) => { /* ... */ }
+};
+```
+
+Becomes:
+```json
+[
+  {
+    "name": "utils_format_date",
+    "source": "src/ai/functions-modules/utils.ts#utils.formatDate"
+  },
+  {
+    "name": "utils_parse_json",
+    "source": "src/ai/functions-modules/utils.ts#utils.parseJson"
+  }
+]
+```
+
+## Name Normalization
+
+- Function names are converted to snake_case lowercase
+- Unsafe characters are removed
+- Name collisions append suffix: `_2`, `_3`, etc.
+- Warnings are emitted for all renames
+
+## Runtime Behavior
+
+- Function runtime is **lazy-loaded** on first request
+- Runtime is **cached in-memory** after initial load
+- File changes require **process restart** to take effect
+- Both `GET /navai/functions` and `POST /navai/functions/execute` share the same runtime instance
+
+## Configuration
+
+Control function discovery with `RegisterNavaiExpressRoutesOptions`:
+
+```typescript
+registerNavaiExpressRoutes(app, {
+  includeFunctionsRoutes: true, // Enable functions routes
+  functionsListPath: "/navai/functions", // Custom path
+  functionsBaseDir: process.cwd(), // Base directory for scanning
+  functionsFolders: "src/ai/functions-modules", // Folders to scan
+  includeExtensions: ["ts", "js", "mjs"], // File extensions
+  exclude: ["node_modules", "dist"] // Exclude patterns
+});
+```
+
+## Environment Variables
+
+- `NAVAI_FUNCTIONS_FOLDERS`: Comma-separated list of folders/patterns to scan
+- `NAVAI_FUNCTIONS_BASE_DIR`: Base directory for relative paths (default: `process.cwd()`)
+
+## Implementation
+
+Implemented in `packages/voice-backend/src/index.ts:282-296` via `registerNavaiExpressRoutes`.

@@ -1,0 +1,339 @@
+---
+title: React Web App Example
+description: Complete React web application with NAVAI voice navigation
+---
+
+This example demonstrates a complete React web app with voice-controlled navigation using React Router and NAVAI.
+
+## Project Structure
+
+```
+playground-web/
+├── src/
+│   ├── ai/
+│   │   ├── routes.ts                    # Route definitions
+│   │   ├── generated-module-loaders.ts  # Auto-generated
+│   │   └── functions-modules/           # Custom functions
+│   │       ├── session/
+│   │       │   └── logout.fn.ts
+│   │       └── support/
+│   │           └── open-help.fn.ts
+│   ├── voice/
+│   │   └── VoiceNavigator.tsx          # Voice UI component
+│   ├── pages/
+│   │   ├── HomePage.tsx
+│   │   ├── ProfilePage.tsx
+│   │   ├── SettingsPage.tsx
+│   │   └── HelpPage.tsx
+│   ├── App.tsx                         # Main app component
+│   └── main.tsx                        # Entry point
+├── package.json
+└── .env                                # Environment variables
+```
+
+## Core Application
+
+### Main App Component
+
+<Tabs>
+  <Tab title="App.tsx">
+```typescript
+import { Link, Route, Routes, useLocation } from "react-router-dom";
+import { HomePage } from "./pages/HomePage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { HelpPage } from "./pages/HelpPage";
+import { NAVAI_ROUTE_ITEMS } from "./ai/routes";
+import { VoiceNavigator } from "./voice/VoiceNavigator";
+
+function HeaderNav() {
+  const location = useLocation();
+
+  return (
+    <nav className="top-nav" aria-label="Main navigation">
+      {NAVAI_ROUTE_ITEMS.map((route) => {
+        const active = route.path === location.pathname;
+        return (
+          <Link
+            key={route.path}
+            to={route.path}
+            className={active ? "top-nav-link active" : "top-nav-link"}
+          >
+            {route.name}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function App() {
+  return (
+    <div className="app-shell">
+      <div className="backdrop" aria-hidden />
+      <header className="hero">
+        <img className="hero-logo" src="/icon_navai.jpg" alt="NAVAI logo" />
+        <p className="eyebrow">Navai Voice Playground</p>
+        <h1>Voice-first app navigation</h1>
+        <p className="hero-copy">
+          Say: "llevame a perfil", "abre ajustes" or "cierra sesion".
+          The agent can navigate routes and execute internal app functions.
+        </p>
+        <HeaderNav />
+        <VoiceNavigator />
+      </header>
+
+      <main className="page-wrap">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/help" element={<HelpPage />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+```
+  </Tab>
+  <Tab title="routes.ts">
+```typescript
+import type { NavaiRoute } from "@navai/voice-frontend";
+
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "inicio",
+    path: "/",
+    description: "Landing page with instructions and status",
+    synonyms: ["home", "principal", "start"]
+  },
+  {
+    name: "perfil",
+    path: "/profile",
+    description: "User profile area",
+    synonyms: ["profile", "mi perfil", "account"]
+  },
+  {
+    name: "ajustes",
+    path: "/settings",
+    description: "Preferences and app settings",
+    synonyms: ["settings", "configuracion", "configuration", "config"]
+  },
+  {
+    name: "ayuda",
+    path: "/help",
+    description: "Help and troubleshooting page",
+    synonyms: ["help", "soporte", "support"]
+  }
+];
+```
+  </Tab>
+</Tabs>
+
+## Voice Navigator Component
+
+The `VoiceNavigator` component integrates NAVAI voice capabilities:
+
+```typescript
+import { useWebVoiceAgent } from "@navai/voice-frontend";
+import { useNavigate } from "react-router-dom";
+import { NAVAI_WEB_MODULE_LOADERS } from "../ai/generated-module-loaders";
+import { NAVAI_ROUTE_ITEMS } from "../ai/routes";
+
+export type VoiceNavigatorProps = {
+  apiBaseUrl?: string;
+};
+
+export function VoiceNavigator({ apiBaseUrl }: VoiceNavigatorProps) {
+  const navigate = useNavigate();
+  
+  // Initialize the voice agent
+  const agent = useWebVoiceAgent({
+    navigate,
+    apiBaseUrl,
+    moduleLoaders: NAVAI_WEB_MODULE_LOADERS,
+    defaultRoutes: NAVAI_ROUTE_ITEMS,
+    env: import.meta.env as Record<string, string | undefined>
+  });
+
+  return (
+    <section className="voice-card" aria-live="polite">
+      <div className="voice-row">
+        {!agent.isConnected ? (
+          <button
+            className="voice-button start"
+            onClick={() => void agent.start()}
+            disabled={agent.isConnecting}
+          >
+            {agent.isConnecting ? "Connecting..." : "Start Voice"}
+          </button>
+        ) : (
+          <button className="voice-button stop" onClick={agent.stop}>
+            Stop Voice
+          </button>
+        )}
+        <p className="voice-status">Status: {agent.status}</p>
+      </div>
+
+      {agent.error ? <p className="voice-error">{agent.error}</p> : null}
+    </section>
+  );
+}
+```
+
+## Custom Functions
+
+Add custom voice-triggered functions in the `functions-modules` directory:
+
+<Tabs>
+  <Tab title="session/logout.fn.ts">
+```typescript
+export function logout_user(context: { navigate: (path: string) => void }) {
+  try {
+    // Clear authentication tokens
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("refresh_token");
+  } catch {
+    // Ignore storage errors to avoid breaking other functions
+  }
+
+  // Navigate to home page
+  context.navigate("/");
+  
+  return { ok: true, message: "Session closed." };
+}
+```
+  </Tab>
+  <Tab title="support/open-help.fn.ts">
+```typescript
+export const open_help_center = (context: { navigate: (path: string) => void }) => {
+  // Navigate to help page
+  context.navigate("/help");
+  
+  return { ok: true, path: "/help" };
+};
+```
+  </Tab>
+</Tabs>
+
+## Package Configuration
+
+```json
+{
+  "name": "@navai/playground-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate:module-loaders": "node ./scripts/generate-web-module-loaders.mjs",
+    "predev": "npm run generate:module-loaders",
+    "prebuild": "npm run generate:module-loaders",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@navai/voice-frontend": "^0.1.0",
+    "@openai/agents": "^0.4.14",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-router-dom": "^7.1.5",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.5"
+  }
+}
+```
+
+## Environment Variables
+
+Create a `.env` file:
+
+```bash
+# Backend API URL
+VITE_NAVAI_API_URL=http://localhost:3000
+```
+
+## Running the Application
+
+### Prerequisites
+
+1. Backend server running on `http://localhost:3000` (see [Express Backend Example](/examples/express-backend))
+2. Node.js 18+ installed
+
+### Development
+
+```bash
+# Install dependencies
+npm install
+
+# Generate module loaders from custom functions
+npm run generate:module-loaders
+
+# Start development server
+npm run dev
+```
+
+The app will start on `http://localhost:5173`.
+
+### Production Build
+
+```bash
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+```
+
+## How It Works
+
+### 1. Route Definition
+
+Define routes in `src/ai/routes.ts` with names, paths, descriptions, and synonyms.
+
+### 2. Custom Functions
+
+Create `.fn.ts` files in `src/ai/functions-modules/`. The generator automatically discovers these.
+
+### 3. Module Generation
+
+Run `npm run generate:module-loaders` to create `generated-module-loaders.ts` from your custom functions.
+
+### 4. Voice Agent Setup
+
+Pass the generated loaders and routes to `useWebVoiceAgent()`.
+
+### 5. Voice Interaction
+
+Users can say:
+- "llevame a perfil" - Navigate to profile
+- "abre ajustes" - Open settings
+- "cierra sesion" - Logout (custom function)
+- "ayuda" - Open help center
+
+## Key Features
+
+- React Router integration
+- Type-safe route definitions
+- Auto-discovery of custom functions
+- Real-time voice status feedback
+- Error handling and display
+- Accessible UI components
+
+## Next Steps
+
+- Add more [custom functions](/examples/custom-functions)
+- Learn about [route navigation](/guides/route-configuration)
+- Explore [voice agent hooks](/api/frontend/use-web-voice-agent)
+
+## Related Documentation
+
+- [Frontend Package Reference](/api/frontend/overview)
+- [Custom Functions Guide](/guides/function-modules)
+- [React Native Example](/examples/react-native-app)

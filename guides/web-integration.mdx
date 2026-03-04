@@ -1,0 +1,374 @@
+---
+title: 'Web Integration'
+description: 'Integrate NAVAI voice agent in React web applications'
+---
+
+## Overview
+
+This guide shows you how to integrate the NAVAI voice agent into a React web application using `@navai/voice-frontend`.
+
+## What You'll Build
+
+A voice-controlled navigation system that allows users to:
+- Navigate between routes using voice commands
+- Execute app functions through voice
+- Access backend functions via the agent
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    npm install @navai/voice-frontend @openai/agents zod react-router-dom
+    ```
+
+    <Note>
+    `react` is a peer dependency. This package works with React 18+.
+    </Note>
+  </Step>
+
+  <Step title="Set up environment variables">
+    Create a `.env` file in your web app root:
+
+    ```bash
+    # Required: Backend API URL
+    NAVAI_API_URL=http://localhost:3000
+
+    # Optional: Routes file path (defaults to src/ai/routes.ts)
+    NAVAI_ROUTES_FILE=src/ai/routes.ts
+
+    # Optional: Functions folder (defaults to src/ai/functions-modules)
+    NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+
+    # Optional: Realtime model override
+    NAVAI_REALTIME_MODEL=gpt-realtime
+    ```
+  </Step>
+
+  <Step title="Run the setup script">
+    The package automatically adds npm scripts on install. Manually run setup if needed:
+
+    ```bash
+    npx navai-setup-voice-frontend
+    ```
+
+    This adds to your `package.json`:
+    ```json
+    {
+      "scripts": {
+        "generate:module-loaders": "navai-generate-web-loaders",
+        "predev": "npm run generate:module-loaders",
+        "prebuild": "npm run generate:module-loaders"
+      }
+    }
+    ```
+
+    <Tip>
+    Module loaders are auto-generated before dev/build to ensure your functions are available.
+    </Tip>
+  </Step>
+</Steps>
+
+## Define Routes
+
+Create a routes configuration file:
+
+```typescript src/ai/routes.ts
+import type { NavaiRoute } from "@navai/voice-frontend";
+
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "inicio",
+    path: "/",
+    description: "Landing page with instructions and status",
+    synonyms: ["home", "principal", "start"]
+  },
+  {
+    name: "perfil",
+    path: "/profile",
+    description: "User profile area",
+    synonyms: ["profile", "mi perfil", "account"]
+  },
+  {
+    name: "ajustes",
+    path: "/settings",
+    description: "Preferences and app settings",
+    synonyms: ["settings", "configuracion", "configuration", "config"]
+  },
+  {
+    name: "ayuda",
+    path: "/help",
+    description: "Help and troubleshooting page",
+    synonyms: ["help", "soporte", "support"]
+  }
+];
+```
+
+<Note>
+The `name` field is the canonical route name the agent uses. `synonyms` help the agent match natural language.
+</Note>
+
+## Create the Voice Navigator Component
+
+Use the `useWebVoiceAgent` hook to manage the voice agent lifecycle:
+
+```tsx src/voice/VoiceNavigator.tsx
+import { useWebVoiceAgent } from "@navai/voice-frontend";
+import { useNavigate } from "react-router-dom";
+import { NAVAI_WEB_MODULE_LOADERS } from "../ai/generated-module-loaders";
+import { NAVAI_ROUTE_ITEMS } from "../ai/routes";
+
+export type VoiceNavigatorProps = {
+  apiBaseUrl?: string;
+};
+
+export function VoiceNavigator({ apiBaseUrl }: VoiceNavigatorProps) {
+  const navigate = useNavigate();
+  const agent = useWebVoiceAgent({
+    navigate,
+    apiBaseUrl,
+    moduleLoaders: NAVAI_WEB_MODULE_LOADERS,
+    defaultRoutes: NAVAI_ROUTE_ITEMS,
+    env: import.meta.env as Record<string, string | undefined>
+  });
+
+  return (
+    <section className="voice-card" aria-live="polite">
+      <div className="voice-row">
+        {!agent.isConnected ? (
+          <button
+            className="voice-button start"
+            onClick={() => void agent.start()}
+            disabled={agent.isConnecting}
+          >
+            {agent.isConnecting ? "Connecting..." : "Start Voice"}
+          </button>
+        ) : (
+          <button className="voice-button stop" onClick={agent.stop}>
+            Stop Voice
+          </button>
+        )}
+        <p className="voice-status">Status: {agent.status}</p>
+      </div>
+
+      {agent.error ? <p className="voice-error">{agent.error}</p> : null}
+    </section>
+  );
+}
+```
+
+<Tip>
+This example is from `apps/playground-web/src/voice/VoiceNavigator.tsx:1-39` in the NAVAI source.
+</Tip>
+
+## Integrate into Your App
+
+Add the `VoiceNavigator` component to your app:
+
+```tsx src/App.tsx
+import { Link, Route, Routes, useLocation } from "react-router-dom";
+import { HomePage } from "./pages/HomePage";
+import { ProfilePage } from "./pages/ProfilePage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { HelpPage } from "./pages/HelpPage";
+import { NAVAI_ROUTE_ITEMS } from "./ai/routes";
+import { VoiceNavigator } from "./voice/VoiceNavigator";
+
+function HeaderNav() {
+  const location = useLocation();
+
+  return (
+    <nav className="top-nav" aria-label="Main navigation">
+      {NAVAI_ROUTE_ITEMS.map((route) => {
+        const active = route.path === location.pathname;
+        return (
+          <Link
+            key={route.path}
+            to={route.path}
+            className={active ? "top-nav-link active" : "top-nav-link"}
+          >
+            {route.name}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+export function App() {
+  return (
+    <div className="app-shell">
+      <header className="hero">
+        <h1>Voice-first app navigation</h1>
+        <p>
+          Say: "llevame a perfil", "abre ajustes" or "cierra sesion". The agent can
+          navigate routes and execute internal app functions through tools.
+        </p>
+        <HeaderNav />
+        <VoiceNavigator />
+      </header>
+
+      <main className="page-wrap">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/help" element={<HelpPage />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+```
+
+## How It Works
+
+The `useWebVoiceAgent` hook manages the complete agent lifecycle:
+
+<Steps>
+  <Step title="Runtime configuration">
+    Resolves routes, function modules, and environment settings
+  </Step>
+
+  <Step title="Backend client creation">
+    Creates an HTTP client pointing to `NAVAI_API_URL`
+  </Step>
+
+  <Step title="Client secret request (on start)">
+    Requests an ephemeral token from `POST /navai/realtime/client-secret`
+  </Step>
+
+  <Step title="Backend function discovery">
+    Fetches available backend functions from `GET /navai/functions`
+  </Step>
+
+  <Step title="Agent creation">
+    Builds a `RealtimeAgent` with:
+    - `navigate_to` tool (built-in)
+    - `execute_app_function` tool (built-in)
+    - Local function tools (from your `functions-modules`)
+    - Backend function tools (from backend)
+  </Step>
+
+  <Step title="Session connection">
+    Connects to OpenAI Realtime WebSocket using the ephemeral token
+  </Step>
+</Steps>
+
+## Agent State Machine
+
+The hook exposes these states:
+
+- `idle` - Not connected
+- `connecting` - Requesting client secret and connecting
+- `connected` - Voice session active
+- `error` - Connection or runtime error
+
+Access via:
+```typescript
+agent.status // "idle" | "connecting" | "connected" | "error"
+agent.isConnected // boolean
+agent.isConnecting // boolean
+agent.error // string | null
+```
+
+## Function Execution Precedence
+
+When the agent calls a function:
+
+1. **Try local function first** (from `functions-modules`)
+2. **Fall back to backend function** if not found locally
+3. **If both exist:** Local function wins, backend ignored with warning
+
+<Warning>
+Reserved names `navigate_to` and `execute_app_function` are never used as direct tool names.
+</Warning>
+
+## Generate Module Loaders
+
+Module loaders are auto-generated TypeScript files that import your function modules:
+
+```bash
+npm run generate:module-loaders
+```
+
+This creates `src/ai/generated-module-loaders.ts`:
+
+```typescript
+import type { NavaiFunctionModuleLoaders } from "@navai/voice-frontend";
+
+export const NAVAI_WEB_MODULE_LOADERS: NavaiFunctionModuleLoaders = [
+  {
+    modulePath: "src/ai/functions-modules/session/logout.fn.ts",
+    loader: () => import("../functions-modules/session/logout.fn")
+  },
+  {
+    modulePath: "src/ai/functions-modules/support/open-help.fn.ts",
+    loader: () => import("../functions-modules/support/open-help.fn")
+  }
+];
+```
+
+<Tip>
+Loaders are regenerated automatically before `dev`, `build`, `typecheck`, and `lint`.
+</Tip>
+
+## Custom Configuration
+
+For advanced use cases, configure runtime options:
+
+```typescript
+const agent = useWebVoiceAgent({
+  navigate,
+  apiBaseUrl: "http://localhost:3000",
+  moduleLoaders: NAVAI_WEB_MODULE_LOADERS,
+  defaultRoutes: NAVAI_ROUTE_ITEMS,
+  env: {
+    NAVAI_REALTIME_MODEL: "gpt-realtime",
+    NAVAI_FUNCTIONS_FOLDERS: "src/ai/functions-modules,...",
+    NAVAI_ROUTES_FILE: "src/ai/routes.ts"
+  }
+});
+```
+
+## Troubleshooting
+
+### "NAVAI_API_URL is required"
+
+Ensure `.env` contains:
+```bash
+NAVAI_API_URL=http://localhost:3000
+```
+
+### "No generated module loaders were found"
+
+Run the loader generation command:
+```bash
+npm run generate:module-loaders
+```
+
+### Agent connects but doesn't respond
+
+Check that:
+1. Backend server is running
+2. `OPENAI_API_KEY` is set in backend `.env`
+3. CORS is configured to allow your origin
+
+### Functions not available
+
+Verify:
+1. Function files exist in `src/ai/functions-modules`
+2. Module loaders were regenerated
+3. Function exports are valid (see [Function Modules](/guides/function-modules))
+
+## Next Steps
+
+- [Function Modules](/guides/function-modules) - Create local and backend functions
+- [Route Configuration](/guides/route-configuration) - Advanced route patterns
+- [Mobile Integration](/guides/mobile-integration) - Build for React Native
+
+## Related API Reference
+
+- [useWebVoiceAgent](/api/frontend/use-web-voice-agent)
+- [buildNavaiAgent](/api/frontend/build-agent)
+- [NavaiRoute](/api/frontend/types#navairoute)

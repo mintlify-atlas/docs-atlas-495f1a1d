@@ -1,0 +1,136 @@
+---
+title: Frontend Package Overview
+description: React integration for Navai voice agents
+---
+
+## Introduction
+
+The `@navai/voice-frontend` package provides React hooks and utilities for integrating Navai voice agents into web applications. It handles the complete lifecycle of voice interactions, from authentication to function execution.
+
+## Installation
+
+```bash
+npm install @navai/voice-frontend
+```
+
+## Core Features
+
+### Voice Agent Integration
+
+The `useWebVoiceAgent` hook manages the entire voice agent lifecycle:
+
+- Real-time connection management
+- Backend authentication and function loading
+- Route-based navigation
+- Frontend and backend function execution
+- Error handling and state management
+
+### Agent Building
+
+The `buildNavaiAgent` function creates a configured OpenAI Realtime agent with:
+
+- Navigation tools for route management
+- Function execution capabilities
+- Dynamic tool registration
+- Conflict detection and warnings
+
+### Backend Client
+
+The `createNavaiBackendClient` provides HTTP client functionality for:
+
+- Creating ephemeral client secrets
+- Listing available backend functions
+- Executing backend functions
+
+## Quick Start
+
+```tsx
+import { useWebVoiceAgent } from '@navai/voice-frontend';
+
+function VoiceButton() {
+  const { status, start, stop } = useWebVoiceAgent({
+    navigate: (path) => router.push(path),
+    moduleLoaders: {
+      './functions/search.ts': () => import('./functions/search')
+    },
+    defaultRoutes: [
+      { name: 'home', path: '/', description: 'Home page' },
+      { name: 'profile', path: '/profile', description: 'User profile' }
+    ]
+  });
+
+  return (
+    <button onClick={status === 'connected' ? stop : start}>
+      {status === 'connected' ? 'Stop' : 'Start'} Voice
+    </button>
+  );
+}
+```
+
+## Package Exports
+
+### Hooks
+
+- `useWebVoiceAgent` - Main React hook for voice agent integration
+
+### Agent Building
+
+- `buildNavaiAgent` - Create configured Realtime agent
+- `BuildNavaiAgentOptions` - Agent configuration options
+- `BuildNavaiAgentResult` - Agent build result with warnings
+
+### Backend Client
+
+- `createNavaiBackendClient` - Create HTTP client for backend
+- `NavaiBackendClient` - Backend client interface
+- `CreateNavaiBackendClientOptions` - Client configuration
+
+### Functions
+
+- `loadNavaiFunctions` - Load and register frontend functions
+- `NavaiFunctionDefinition` - Function definition type
+- `NavaiFunctionsRegistry` - Function registry type
+- `NavaiFunctionModuleLoaders` - Module loader map
+
+### Routes
+
+- `resolveNavaiRoute` - Resolve route name/path to path
+- `getNavaiRoutePromptLines` - Generate route prompt text
+- `NavaiRoute` - Route definition type
+
+### Types
+
+See [Types Reference](/api/frontend/types) for complete type definitions.
+
+## Architecture
+
+```
+┌─────────────────────┐
+│  useWebVoiceAgent   │  React Hook
+└──────────┬──────────┘
+           │
+     ┌─────┴─────┐
+     │           │
+┌────▼─────┐  ┌──▼────────────┐
+│  Agent   │  │ Backend Client│
+│ Builder  │  │               │
+└────┬─────┘  └──┬────────────┘
+     │           │
+     │      ┌────▼─────┐
+     │      │ Functions│
+     │      │  List    │
+     │      └────┬─────┘
+     │           │
+┌────▼───────────▼───┐
+│  Realtime Session  │
+└────────────────────┘
+```
+
+## Next Steps
+
+- [useWebVoiceAgent Hook](/api/frontend/use-web-voice-agent) - Complete hook reference
+- [buildNavaiAgent](/api/frontend/build-agent) - Agent building API
+- [Backend Client](/api/frontend/backend-client) - HTTP client reference
+- [Functions](/api/frontend/functions) - Function loading and execution
+- [Routes](/api/frontend/routes) - Route resolution
+- [Types](/api/frontend/types) - TypeScript types

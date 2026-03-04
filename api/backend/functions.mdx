@@ -1,0 +1,408 @@
+---
+title: "Function Runtime APIs"
+description: "Load and execute dynamic backend functions"
+---
+
+## Overview
+
+Function runtime APIs handle discovery, loading, and execution of backend tools. Functions are discovered by scanning configured folders, then transformed into normalized tool definitions that can be executed safely.
+
+## loadNavaiFunctions
+
+### Function Signature
+
+```typescript
+async function loadNavaiFunctions(
+  functionModuleLoaders: NavaiFunctionModuleLoaders
+): Promise<NavaiFunctionsRegistry>
+```
+
+**Source:** `packages/voice-backend/src/functions.ts:278`
+
+### Description
+
+Imports modules from the provided loaders, extracts all callable exports, and transforms them into normalized function definitions. Handles functions, classes, and objects with callable members. Returns a registry with name-indexed and ordered function definitions plus any warnings.
+
+### Parameters
+
+<ParamField path="functionModuleLoaders" type="NavaiFunctionModuleLoaders" required>
+  Record mapping file paths to async module loader functions
+
+  **Type Definition:**
+  ```typescript
+  type NavaiFunctionModuleLoaders = Record<string, () => Promise<unknown>>
+  ```
+
+  **Example:**
+  ```typescript
+  {
+    "src/ai/functions-modules/weather.ts": () => import("./weather.ts"),
+    "src/ai/functions-modules/calendar.ts": () => import("./calendar.ts")
+  }
+  ```
+</ParamField>
+
+### Return Value
+
+<ResponseField name="NavaiFunctionsRegistry" type="Promise<NavaiFunctionsRegistry>">
+  <Expandable title="properties">
+    <ResponseField name="byName" type="Map<string, NavaiFunctionDefinition>" required>
+      Map of function names to definitions for O(1) lookup
+    </ResponseField>
+
+    <ResponseField name="ordered" type="NavaiFunctionDefinition[]" required>
+      Array of all function definitions in discovery order
+    </ResponseField>
+
+    <ResponseField name="warnings" type="string[]" required>
+      Array of warning messages from loading process
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Export-to-Tool Mapping
+
+The loader transforms different export types:
+
+#### 1. Exported Function
+
+```typescript
+// src/ai/functions-modules/weather.ts
+export default function getWeather(location: string) {
+  return { temp: 72, location };
+}
+```
+
+**Result:** One tool named `get_weather`
+
+#### 2. Exported Class
+
+```typescript
+// src/ai/functions-modules/calendar.ts
+export class Calendar {
+  getEvents() { return []; }
+  createEvent(title: string) { return { title }; }
+}
+```
+
+**Result:** Two tools:
+- `calendar_get_events`
+- `calendar_create_event`
+
+#### 3. Exported Object
+
+```typescript
+// src/ai/functions-modules/utils.ts
+export const tools = {
+  add: (a: number, b: number) => a + b,
+  multiply: (a: number, b: number) => a * b
+};
+```
+
+**Result:** Two tools:
+- `tools_add`
+- `tools_multiply`
+
+### Name Normalization
+
+Function names are normalized to snake_case:
+
+1. Convert camelCase to snake_case: `getWeather` → `get_weather`
+2. Remove unsafe characters
+3. Lowercase all letters
+4. On collision, append suffix: `get_weather_2`, `get_weather_3`
+
+<Note>
+A warning is emitted whenever a rename occurs due to collision.
+</Note>
+
+### Argument Resolution
+
+When executing a function, arguments are resolved in this order:
+
+```typescript
+if (payload.args || payload.arguments) {
+  args = payload.args || payload.arguments
+} else if (payload.value) {
+  args = [payload.value]
+} else if (Object.keys(payload).length > 0) {
+  args = [payload]
+}
+
+// If function expects one more arg than provided, append context
+if (callable.length > args.length) {
+  args.push(context)
+}
+```
+
+### Usage Example
+
+```typescript
+import { loadNavaiFunctions } from "@navai/voice-backend";
+import { pathToFileURL } from "node:url";
+
+const loaders = {
+  "src/ai/functions-modules/weather.ts": () => 
+    import(pathToFileURL("/abs/path/to/weather.ts").href)
+};
+
+const registry = await loadNavaiFunctions(loaders);
+
+console.log(registry.ordered.length); // 1
+console.log(registry.byName.get("get_weather"));
+// {
+//   name: "get_weather",
+//   description: "Call exported function default.",
+//   source: "src/ai/functions-modules/weather.ts#default",
+//   run: async (payload, context) => { ... }
+// }
+
+const result = await registry.byName.get("get_weather")!.run(
+  { args: ["San Francisco"] },
+  { req: {} }
+);
+console.log(result); // { temp: 72, location: "San Francisco" }
+```
+
+---
+
+## resolveNavaiBackendRuntimeConfig
+
+### Function Signature
+
+```typescript
+async function resolveNavaiBackendRuntimeConfig(
+  options?: ResolveNavaiBackendRuntimeConfigOptions
+): Promise<ResolveNavaiBackendRuntimeConfigResult>
+```
+
+**Source:** `packages/voice-backend/src/runtime.ts:35`
+
+### Description
+
+Scans the filesystem for function modules based on configured patterns and returns module loaders ready for `loadNavaiFunctions`. Handles environment variables, glob patterns, and fallback logic.
+
+### Parameters
+
+<ParamField path="options" type="ResolveNavaiBackendRuntimeConfigOptions">
+  Runtime configuration options
+
+  <Expandable title="properties">
+    <ParamField path="env" type="Record<string, string | undefined>" default="process.env">
+      Environment variables object
+    </ParamField>
+
+    <ParamField path="functionsFolders" type="string">
+      Comma-separated list of folders/patterns. Overrides `NAVAI_FUNCTIONS_FOLDERS` env var
+    </ParamField>
+
+    <ParamField path="defaultFunctionsFolder" type="string" default="src/ai/functions-modules">
+      Fallback folder if no matches found
+    </ParamField>
+
+    <ParamField path="baseDir" type="string" default="process.cwd()">
+      Base directory for scanning. Can be overridden by `NAVAI_FUNCTIONS_BASE_DIR` env var
+    </ParamField>
+
+    <ParamField path="includeExtensions" type="string[]" default='["ts", "js", "mjs", "cjs", "mts", "cts"]'>
+      File extensions to include
+    </ParamField>
+
+    <ParamField path="exclude" type="string[]" default='["**/node_modules/**", "**/dist/**", "**/.*/**"]'>
+      Glob patterns to exclude from scan. Files ending in `.d.ts` are always excluded
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Return Value
+
+<ResponseField name="ResolveNavaiBackendRuntimeConfigResult" type="Promise<ResolveNavaiBackendRuntimeConfigResult>">
+  <Expandable title="properties">
+    <ResponseField name="functionModuleLoaders" type="NavaiFunctionModuleLoaders" required>
+      Record of file paths to module loader functions
+    </ResponseField>
+
+    <ResponseField name="warnings" type="string[]" required>
+      Array of warning messages from scanning process
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Pattern Matching
+
+Supported pattern formats:
+
+| Pattern | Behavior | Example |
+|---------|----------|--------|
+| `folder` | Match all files in folder | `src/ai/functions-modules` |
+| `folder/...` | Match all files recursively | `src/ai/functions-modules/...` |
+| `glob/**/pattern` | Match using wildcards | `src/features/*/tools` |
+| `path/to/file.ts` | Match specific file | `src/ai/functions-modules/secret.ts` |
+| `pattern1,...` | Match multiple patterns | `src/ai/functions-modules,src/tools` |
+
+### Fallback Logic
+
+```typescript
+if (configured patterns match nothing && patterns were configured) {
+  warnings.push(`NAVAI_FUNCTIONS_FOLDERS did not match any module...`)
+  // Fall back to defaultFunctionsFolder
+}
+```
+
+### Path Normalization
+
+All paths are normalized:
+- Backslashes converted to forward slashes
+- Leading slashes and `./` removed
+- If path doesn't start with `src/`, it's prefixed automatically
+
+### Usage Example
+
+```typescript
+import { resolveNavaiBackendRuntimeConfig } from "@navai/voice-backend";
+
+const config = await resolveNavaiBackendRuntimeConfig({
+  baseDir: process.cwd(),
+  functionsFolders: "src/ai/functions-modules,...",
+  includeExtensions: ["ts", "js"],
+  exclude: ["**/node_modules/**", "**/*.test.ts"]
+});
+
+console.log(Object.keys(config.functionModuleLoaders));
+// [
+//   "src/ai/functions-modules/weather.ts",
+//   "src/ai/functions-modules/calendar.ts"
+// ]
+
+console.log(config.warnings);
+// []
+```
+
+---
+
+## Function Execution Context
+
+When functions are executed via `POST /navai/functions/execute`, they receive:
+
+<ParamField path="payload" type="NavaiFunctionPayload" required>
+  Function arguments and metadata
+
+  **Type Definition:**
+  ```typescript
+  type NavaiFunctionPayload = Record<string, unknown>
+  ```
+
+  **Common Properties:**
+  - `args` or `arguments`: Array of arguments
+  - `value`: Single value argument
+  - `constructorArgs`: For class constructors
+  - `methodArgs`: For class methods
+  - Any other properties passed as first argument
+</ParamField>
+
+<ParamField path="context" type="NavaiFunctionContext" required>
+  Execution context including Express request
+
+  **Type Definition:**
+  ```typescript
+  type NavaiFunctionContext = Record<string, unknown>
+  ```
+
+  **Properties:**
+  - `req`: Express Request object from the execution endpoint
+</ParamField>
+
+### Example Function with Context
+
+```typescript
+// src/ai/functions-modules/auth.ts
+export function getCurrentUser(context: { req: Request }) {
+  const userId = context.req.headers['x-user-id'];
+  return { userId };
+}
+```
+
+**Execution:**
+```json
+POST /navai/functions/execute
+{
+  "function_name": "get_current_user",
+  "payload": {}
+}
+```
+
+The function receives `context.req` from the Express request.
+
+---
+
+## Warnings
+
+The runtime emits warnings for:
+
+| Warning | Cause |
+|---------|-------|
+| `Ignored {path}: module has no exports.` | Empty module |
+| `Ignored {path}: module has no callable exports.` | No functions/classes |
+| `Ignored {path}#{export}: class has no callable instance methods.` | Empty class |
+| `Ignored {path}#{export}: exported object has no callable members.` | Object with no functions |
+| `Renamed duplicated function "{old}" to "{new}".` | Name collision |
+| `Failed to load {path}: {error}` | Import/syntax error |
+| `NAVAI_FUNCTIONS_FOLDERS did not match any module...` | No pattern matches |
+
+<Note>
+Warnings do not stop execution. They are returned in the registry and route responses for debugging.
+</Note>
+
+---
+
+## Complete Example
+
+```typescript
+import { 
+  resolveNavaiBackendRuntimeConfig,
+  loadNavaiFunctions 
+} from "@navai/voice-backend";
+
+// Step 1: Resolve runtime config
+const runtimeConfig = await resolveNavaiBackendRuntimeConfig({
+  env: process.env,
+  baseDir: process.cwd(),
+  functionsFolders: "src/ai/functions-modules"
+});
+
+if (runtimeConfig.warnings.length > 0) {
+  console.warn("Runtime warnings:", runtimeConfig.warnings);
+}
+
+// Step 2: Load functions
+const registry = await loadNavaiFunctions(
+  runtimeConfig.functionModuleLoaders
+);
+
+if (registry.warnings.length > 0) {
+  console.warn("Registry warnings:", registry.warnings);
+}
+
+console.log(`Loaded ${registry.ordered.length} functions:`);
+for (const fn of registry.ordered) {
+  console.log(`- ${fn.name}: ${fn.description}`);
+}
+
+// Step 3: Execute a function
+const weatherFn = registry.byName.get("get_weather");
+if (weatherFn) {
+  const result = await weatherFn.run(
+    { args: ["San Francisco"] },
+    { req: {} }
+  );
+  console.log("Weather result:", result);
+}
+```
+
+---
+
+## Related APIs
+
+- [registerNavaiExpressRoutes](/api/backend/register-routes) - Register routes that use these APIs
+- [NavaiFunctionsRegistry type](/api/backend/types#navaifunctionsregistry) - Registry type definition
+- [NavaiFunctionDefinition type](/api/backend/types#navaifunctiondefinition) - Function definition type

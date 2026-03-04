@@ -1,0 +1,135 @@
+---
+title: "Backend Package Overview"
+description: "Complete reference for @navai/voice-backend package APIs"
+---
+
+## Introduction
+
+The `@navai/voice-backend` package provides server-side functionality for Navai voice applications. It handles two critical responsibilities:
+
+1. **Client Secret Management** - Mint secure ephemeral `client_secret` tokens for OpenAI Realtime API
+2. **Function Runtime** - Discover, validate, expose, and execute backend tools from your codebase
+
+## Installation
+
+```bash
+npm install @navai/voice-backend
+```
+
+<Note>
+`express` is required as a peer dependency.
+</Note>
+
+## Architecture
+
+The runtime architecture consists of three layers:
+
+### 1. Entry Layer (`src/index.ts`)
+
+Exposes the public API including:
+- Client secret helpers
+- Express route registration
+- Type exports
+
+### 2. Discovery Layer (`src/runtime.ts`)
+
+Handles function discovery:
+- Resolves `NAVAI_FUNCTIONS_FOLDERS` configuration
+- Scans files and applies path matching rules
+- Builds module loaders for matched files
+
+### 3. Execution Layer (`src/functions.ts`)
+
+Manages function execution:
+- Imports matched modules
+- Transforms exports into normalized tool definitions
+- Executes tools safely with payload validation
+
+## Request Flow
+
+End-to-end request flow:
+
+1. Frontend/mobile calls `POST /navai/realtime/client-secret`
+2. Backend validates options and API key policy
+3. Backend calls OpenAI `POST https://api.openai.com/v1/realtime/client_secrets`
+4. Frontend/mobile calls `GET /navai/functions` to discover allowed tools
+5. Agent calls `POST /navai/functions/execute` with `function_name` and `payload`
+6. Backend executes only tool names loaded in the registry
+
+## Core APIs
+
+### Express Integration
+
+<Card title="registerNavaiExpressRoutes" icon="server" href="/api/backend/register-routes">
+  Register all Navai routes with your Express app
+</Card>
+
+### Client Secret Management
+
+<Card title="Client Secret APIs" icon="key" href="/api/backend/client-secret">
+  Create and manage OpenAI Realtime client secrets
+</Card>
+
+### Function Runtime
+
+<Card title="Function APIs" icon="function" href="/api/backend/functions">
+  Load and execute dynamic backend functions
+</Card>
+
+### Type Definitions
+
+<Card title="TypeScript Types" icon="code" href="/api/backend/types">
+  Complete type reference for all APIs
+</Card>
+
+## Quick Start
+
+```typescript
+import express from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+app.use(express.json());
+
+registerNavaiExpressRoutes(app, {
+  backendOptions: {
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    defaultModel: "gpt-realtime",
+    defaultVoice: "marin",
+    clientSecretTtlSeconds: 600
+  }
+});
+
+app.listen(3000);
+```
+
+## Environment Variables
+
+Key environment variables:
+
+- `OPENAI_API_KEY` - Your OpenAI API key
+- `OPENAI_REALTIME_MODEL` - Default model (e.g., `gpt-realtime`)
+- `OPENAI_REALTIME_VOICE` - Default voice (e.g., `marin`)
+- `OPENAI_REALTIME_INSTRUCTIONS` - Default system instructions
+- `OPENAI_REALTIME_LANGUAGE` - Default response language
+- `OPENAI_REALTIME_VOICE_ACCENT` - Default voice accent
+- `OPENAI_REALTIME_VOICE_TONE` - Default voice tone
+- `OPENAI_REALTIME_CLIENT_SECRET_TTL` - TTL in seconds (10-7200)
+- `NAVAI_ALLOW_FRONTEND_API_KEY` - Allow API keys from requests
+- `NAVAI_FUNCTIONS_FOLDERS` - Function discovery paths
+- `NAVAI_FUNCTIONS_BASE_DIR` - Base directory for scanning
+
+## Production Recommendations
+
+<Warning>
+- Keep `OPENAI_API_KEY` only on the server
+- Set `NAVAI_ALLOW_FRONTEND_API_KEY=false` in production
+- Whitelist CORS origins at the application layer
+- Monitor and surface `warnings` from runtime and registry
+- Restart backend when function files change to reload registry
+</Warning>
+
+## Related Packages
+
+- [@navai/voice-frontend](/api/frontend/overview) - Frontend voice integration
+- [@navai/voice-mobile](/api/mobile/overview) - Mobile voice integration

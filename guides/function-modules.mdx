@@ -1,0 +1,467 @@
+---
+title: 'Function Modules'
+description: 'Create and organize function modules for voice agents'
+---
+
+## Overview
+
+Function modules are TypeScript/JavaScript files that export functions, classes, or objects that the voice agent can call. They enable custom app behaviors beyond navigation.
+
+## What Are Function Modules?
+
+Function modules are:
+- **Auto-discovered** from configured folders
+- **Transformed** into agent tools with normalized names
+- **Executable** via voice commands or the `execute_app_function` tool
+- **Available** on frontend, backend, or both
+
+## Export Patterns
+
+NAVAI supports three export shapes:
+
+### 1. Exported Functions
+
+The simplest pattern - export one or more functions:
+
+```typescript src/ai/functions-modules/session/logout.fn.ts
+export function logout_user(context: { navigate: (path: string) => void }) {
+  try {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("refresh_token");
+  } catch {
+    // Ignore storage errors to avoid breaking other functions.
+  }
+
+  context.navigate("/");
+  return { ok: true, message: "Session closed." };
+}
+```
+
+<Tip>
+This creates one tool: `logout_user`. The agent can call it via "cierra sesion" or similar.
+</Tip>
+
+Another example:
+
+```typescript src/ai/functions-modules/utils/math.ts
+export function sumar(a: number, b: number): number {
+  return a + b;
+}
+
+export const es_mayor_de_edad = (edad: number): boolean => {
+  return edad >= 18;
+};
+
+// Non-function exports are ignored
+export const version = "1.0.0";
+```
+
+This creates two tools:
+- `sumar` (add two numbers)
+- `es_mayor_de_edad` (check if age >= 18)
+
+### 2. Exported Classes
+
+Export a class to create tools from its instance methods:
+
+```typescript src/ai/functions-modules/system/ai-service.ts
+export default class ServicioIA {
+  constructor(private readonly apiKey: string = "demo-key") {}
+
+  iniciar(): string {
+    return `Servicio iniciado con key: ${this.apiKey}`;
+  }
+}
+```
+
+This creates one tool: `servicio_ia_iniciar`
+
+To call with constructor args:
+```json
+{
+  "function_name": "servicio_ia_iniciar",
+  "payload": {
+    "constructorArgs": ["my-api-key"],
+    "methodArgs": []
+  }
+}
+```
+
+### 3. Exported Objects
+
+Export an object with callable members:
+
+```typescript src/ai/functions-modules/support/open-help.fn.ts
+export const open_help_center = (context: { navigate: (path: string) => void }) => {
+  context.navigate("/help");
+  return { ok: true, path: "/help" };
+};
+```
+
+This creates one tool: `open_help_center`
+
+## Name Normalization
+
+All function names are normalized to snake_case:
+
+| Export Name | Tool Name |
+|-------------|----------|
+| `logout_user` | `logout_user` |
+| `logoutUser` | `logout_user` |
+| `LogoutUser` | `logout_user` |
+| `LOGOUT_USER` | `logout_user` |
+| `sumar` | `sumar` |
+| `esMayorDeEdad` | `es_mayor_de_edad` |
+
+<Warning>
+On name collisions, NAVAI appends suffixes (`_2`, `_3`, ...) and emits warnings.
+</Warning>
+
+## Reserved Names
+
+These names are reserved and cannot be used as direct tools:
+- `navigate_to`
+- `execute_app_function`
+
+They remain accessible via `execute_app_function` if exported.
+
+## Context Injection
+
+Functions can optionally receive a context object as the last parameter:
+
+```typescript
+export function my_function(
+  arg1: string,
+  arg2: number,
+  context: { navigate: (path: string) => void; req?: Request }
+) {
+  // Use context.navigate to change routes
+  // Use context.req on backend functions
+}
+```
+
+**Context is appended when:**
+- Function arity (parameter count) expects one more argument than provided
+
+**Frontend context includes:**
+```typescript
+{ navigate: (path: string) => void }
+```
+
+**Backend context includes:**
+```typescript
+{ req: Request } // Express request object
+```
+
+## Argument Mapping
+
+When the agent calls a function, arguments are resolved in this order:
+
+1. **`payload.args`** - Direct argument array
+   ```json
+   { "args": ["value1", "value2"] }
+   ```
+
+2. **`payload.arguments`** - Alias for `args`
+   ```json
+   { "arguments": ["value1", "value2"] }
+   ```
+
+3. **`payload.value`** - Single value becomes first argument
+   ```json
+   { "value": "hello" }
+   ```
+
+4. **Full payload** - Entire payload becomes first argument
+   ```json
+   { "name": "John", "age": 30 }
+   ```
+
+5. **Context appended** - If function arity indicates one more param
+
+## File Organization
+
+Organize functions by domain:
+
+```
+src/ai/functions-modules/
+├── session/
+│   ├── logout.fn.ts
+│   └── refresh-token.fn.ts
+├── support/
+│   ├── open-help.fn.ts
+│   └── submit-feedback.fn.ts
+├── utils/
+│   ├── math.ts
+│   └── format.ts
+└── system/
+    └── ai-service.ts
+```
+
+<Note>
+The `.fn.ts` suffix is a convention, not required. Any `.ts`, `.js`, `.mjs`, `.cjs`, `.mts`, or `.cts` file works.
+</Note>
+
+## Folder Configuration
+
+Configure which folders are scanned:
+
+### Environment Variable
+
+```bash .env
+# Single folder
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+
+# Recursive folder
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules/...
+
+# Multiple folders (CSV)
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules,src/features/*/voice-functions
+
+# Wildcard pattern
+NAVAI_FUNCTIONS_FOLDERS=src/features/*/voice-functions
+
+# Explicit file
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules/secret.ts
+```
+
+### Backend Options
+
+```typescript
+registerNavaiExpressRoutes(app, {
+  runtimeOptions: {
+    functionsFolders: "src/ai/functions-modules,...",
+    baseDir: process.cwd()
+  }
+});
+```
+
+### Frontend Options
+
+```typescript
+const agent = useWebVoiceAgent({
+  env: {
+    NAVAI_FUNCTIONS_FOLDERS: "src/ai/functions-modules,..."
+  }
+});
+```
+
+## Backend vs Frontend Functions
+
+### Frontend Functions
+
+**Location:** Web or mobile app codebase
+
+**Execution:** In the browser or React Native runtime
+
+**Use cases:**
+- Navigation
+- UI state changes
+- Client-side storage
+- App-specific actions
+
+**Example:**
+```typescript src/ai/functions-modules/session/logout.fn.ts
+export function logout_user(context: { navigate: (path: string) => void }) {
+  localStorage.removeItem("auth_token");
+  context.navigate("/");
+  return { ok: true, message: "Session closed." };
+}
+```
+
+### Backend Functions
+
+**Location:** Express backend codebase
+
+**Execution:** On the server
+
+**Use cases:**
+- Database queries
+- API calls to external services
+- Server-side computations
+- Sensitive operations
+
+**Example:**
+```typescript src/ai/functions-modules/database/get-user.ts
+import { Request } from "express";
+import { db } from "../../db";
+
+export async function get_user_profile(
+  userId: string,
+  context: { req: Request }
+) {
+  const user = await db.users.findOne({ id: userId });
+  return { ok: true, user };
+}
+```
+
+### Execution Precedence
+
+When both frontend and backend have a function with the same name:
+
+1. **Frontend function wins**
+2. Backend function is ignored with a warning
+
+<Tip>
+Use distinct names to avoid conflicts, e.g., `get_user_profile_frontend` vs `get_user_profile_backend`.
+</Tip>
+
+## Function Discovery
+
+The runtime scans configured folders and:
+
+1. **Includes** files matching `includeExtensions` (default: `ts`, `js`, `mjs`, `cjs`, `mts`, `cts`)
+2. **Excludes** patterns from `exclude` (default: `node_modules`, `dist`, hidden files)
+3. **Ignores** `*.d.ts` declaration files
+4. **Builds** module loaders for matched files
+
+<Note>
+Function registry is lazy-loaded on first request and cached in-memory. Restart the server to pick up changes.
+</Note>
+
+## Module Loaders
+
+### Frontend/Mobile
+
+Generate loaders before running:
+
+```bash
+npm run generate:module-loaders
+```
+
+This creates:
+
+```typescript src/ai/generated-module-loaders.ts
+import type { NavaiFunctionModuleLoaders } from "@navai/voice-frontend";
+
+export const NAVAI_WEB_MODULE_LOADERS: NavaiFunctionModuleLoaders = [
+  {
+    modulePath: "src/ai/functions-modules/session/logout.fn.ts",
+    loader: () => import("../functions-modules/session/logout.fn")
+  },
+  {
+    modulePath: "src/ai/functions-modules/support/open-help.fn.ts",
+    loader: () => import("../functions-modules/support/open-help.fn")
+  }
+];
+```
+
+### Backend
+
+Backend loaders are built dynamically at runtime - no generation needed.
+
+## Return Values
+
+Functions can return:
+- Primitives: `string`, `number`, `boolean`
+- Objects: `{ ok: true, data: ... }`
+- Promises: `async` functions are supported
+- Errors: Throw to signal failure
+
+**Success pattern:**
+```typescript
+export function my_function() {
+  return { ok: true, message: "Success" };
+}
+```
+
+**Error pattern:**
+```typescript
+export function my_function() {
+  throw new Error("Something went wrong");
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use descriptive names">
+    Name functions clearly: `logout_user`, not `logout`
+  </Step>
+
+  <Step title="Return structured data">
+    Use objects with `ok` and `message` fields:
+    ```typescript
+    return { ok: true, message: "Action completed" };
+    ```
+  </Step>
+
+  <Step title="Handle errors gracefully">
+    Catch errors and return meaningful messages:
+    ```typescript
+    try {
+      // ...
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+    ```
+  </Step>
+
+  <Step title="Document complex functions">
+    Add JSDoc comments for clarity:
+    ```typescript
+    /**
+     * Logs out the current user and navigates to home.
+     */
+    export function logout_user(context: { navigate: (path: string) => void }) {
+      // ...
+    }
+    ```
+  </Step>
+
+  <Step title="Organize by feature">
+    Group related functions in folders:
+    - `session/` for auth-related functions
+    - `support/` for help/feedback functions
+    - `utils/` for utilities
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### "No generated module loaders were found"
+
+Run the loader generation command:
+```bash
+npm run generate:module-loaders
+```
+
+### Function not available to agent
+
+Check:
+1. File is in a configured `NAVAI_FUNCTIONS_FOLDERS` path
+2. Function is exported (not internal)
+3. Module loaders were regenerated
+4. Server was restarted (backend only)
+
+### Name collision warnings
+
+Ensure function names are unique across all modules. NAVAI will append suffixes (`_2`, `_3`) but this can be confusing.
+
+### Context not passed correctly
+
+Verify function signature expects one more parameter than provided args. Example:
+
+```typescript
+// This receives context
+export function my_fn(arg1: string, context: { navigate: (path: string) => void }) {
+  // ...
+}
+
+// This does NOT receive context
+export function my_fn(arg1: string, arg2: string) {
+  // ...
+}
+```
+
+## Next Steps
+
+- [Backend Setup](/guides/backend-setup) - Configure backend function execution
+- [Web Integration](/guides/web-integration) - Use functions in web apps
+- [Mobile Integration](/guides/mobile-integration) - Use functions in mobile apps
+
+## Related API Reference
+
+- [loadNavaiFunctions](/api/backend/functions)
+- [NavaiFunctionDefinition](/api/backend/types#navaifunctiondefinition)
+- [NavaiFunctionsRegistry](/api/backend/types#navaifunctionsregistry)

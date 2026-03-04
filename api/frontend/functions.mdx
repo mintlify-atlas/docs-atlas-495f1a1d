@@ -1,0 +1,457 @@
+---
+title: loadNavaiFunctions
+description: Load and register frontend functions
+---
+
+## Overview
+
+The `loadNavaiFunctions` function dynamically loads frontend functions from module loaders, extracts callable exports, and builds a registry for the voice agent.
+
+## Import
+
+```typescript
+import { loadNavaiFunctions } from '@navai/voice-frontend';
+```
+
+## Type Signature
+
+```typescript
+async function loadNavaiFunctions(
+  functionModuleLoaders: NavaiFunctionModuleLoaders
+): Promise<NavaiFunctionsRegistry>
+```
+
+## Parameters
+
+<ParamField path="functionModuleLoaders" type="NavaiFunctionModuleLoaders" required>
+  Map of module paths to dynamic import functions
+  
+  ```typescript
+  type NavaiFunctionModuleLoaders = Record<string, () => Promise<unknown>>;
+  ```
+  
+  **Example:**
+  ```typescript
+  {
+    './functions/search.ts': () => import('./functions/search'),
+    './functions/profile.ts': () => import('./functions/profile')
+  }
+  ```
+</ParamField>
+
+## Return Value
+
+<ResponseField name="NavaiFunctionsRegistry" type="object" required>
+  Registry of loaded functions
+
+  <ResponseField name="byName" type="Map<string, NavaiFunctionDefinition>" required>
+    Map of normalized function names to definitions
+  </ResponseField>
+
+  <ResponseField name="ordered" type="NavaiFunctionDefinition[]" required>
+    Array of function definitions in load order
+  </ResponseField>
+
+  <ResponseField name="warnings" type="string[]" required>
+    Array of non-fatal warnings from loading process
+  </ResponseField>
+</ResponseField>
+
+## Function Definition
+
+```typescript
+type NavaiFunctionDefinition = {
+  name: string;                // Normalized function name
+  description: string;         // Function description
+  source: string;              // Module path and export name
+  run: (                       // Execution wrapper
+    payload: NavaiFunctionPayload,
+    context: NavaiFunctionContext
+  ) => Promise<unknown> | unknown;
+};
+```
+
+## Function Context
+
+```typescript
+type NavaiFunctionContext = {
+  navigate: (path: string) => void;
+};
+```
+
+## Supported Export Types
+
+### 1. Named Functions
+
+```typescript
+// functions/search.ts
+export function search(query: string) {
+  return { results: [] };
+}
+```
+
+**Result:**
+- Name: `search`
+- Description: `Call exported function search.`
+- Source: `./functions/search.ts#search`
+
+### 2. Default Functions
+
+```typescript
+// functions/getUserProfile.ts
+export default function getUserProfile(userId: string) {
+  return { id: userId, name: 'User' };
+}
+```
+
+**Result:**
+- Name: `get_user_profile` (normalized from file name)
+- Description: `Call exported function default.`
+- Source: `./functions/getUserProfile.ts#default`
+
+### 3. Classes
+
+```typescript
+// functions/analytics.ts
+export class Analytics {
+  track(event: string) {
+    console.log(event);
+  }
+  
+  identify(userId: string) {
+    console.log('User:', userId);
+  }
+}
+```
+
+**Results:**
+- Name: `analytics_track`
+  - Description: `Call class method Analytics.track().`
+  - Source: `./functions/analytics.ts#Analytics.track`
+- Name: `analytics_identify`
+  - Description: `Call class method Analytics.identify().`
+  - Source: `./functions/analytics.ts#Analytics.identify`
+
+### 4. Object Exports
+
+```typescript
+// functions/api.ts
+export const api = {
+  fetchUser: (id: string) => ({ id, name: 'User' }),
+  createPost: (title: string) => ({ id: 1, title })
+};
+```
+
+**Results:**
+- Name: `api_fetch_user`
+  - Description: `Call exported object member api.fetchUser().`
+  - Source: `./functions/api.ts#api.fetchUser`
+- Name: `api_create_post`
+  - Description: `Call exported object member api.createPost().`
+  - Source: `./functions/api.ts#api.createPost`
+
+## Name Normalization
+
+Function names are normalized to lowercase with underscores:
+
+```typescript
+'getUserProfile' → 'get_user_profile'
+'fetchData'      → 'fetch_data'
+'my-function'    → 'my_function'
+'API_Call'       → 'api_call'
+```
+
+**Rules:**
+1. Convert camelCase to snake_case
+2. Replace non-alphanumeric characters with `_`
+3. Remove leading/trailing underscores
+4. Convert to lowercase
+
+## Payload Handling
+
+### Function Arguments
+
+```typescript
+// Function with args
+export function search(query: string, limit: number) {
+  return { results: [] };
+}
+
+// Called via payload.args
+{
+  payload: {
+    args: ['query string', 10]
+  }
+}
+```
+
+### Class Methods
+
+```typescript
+export class Analytics {
+  constructor(apiKey: string) {}
+  track(event: string, properties: object) {}
+}
+
+// Called via constructorArgs and methodArgs
+{
+  payload: {
+    constructorArgs: ['api-key-123'],
+    methodArgs: ['page_view', { page: '/home' }]
+  }
+}
+```
+
+### Single Value
+
+```typescript
+export function processValue(value: any) {
+  return value;
+}
+
+// Called via payload.value
+{
+  payload: {
+    value: 'some value'
+  }
+}
+```
+
+### Full Payload
+
+```typescript
+export function handleRequest(request: object) {
+  return request;
+}
+
+// Called with entire payload
+{
+  payload: {
+    method: 'GET',
+    url: '/api/users'
+  }
+}
+```
+
+## Context Injection
+
+If a function has more parameters than provided arguments, the context is automatically injected:
+
+```typescript
+// Function with context parameter
+export function navigateToProfile(
+  userId: string,
+  context: NavaiFunctionContext
+) {
+  context.navigate(`/profile/${userId}`);
+}
+
+// Called with:
+{
+  payload: { args: ['user123'] }
+}
+
+// Context is injected automatically
+```
+
+## Examples
+
+### Basic Loading
+
+```typescript
+import { loadNavaiFunctions } from '@navai/voice-frontend';
+
+const registry = await loadNavaiFunctions({
+  './functions/search.ts': () => import('./functions/search'),
+  './functions/profile.ts': () => import('./functions/profile')
+});
+
+console.log(registry.ordered.length); // 2
+console.log(registry.byName.get('search')); // Function definition
+```
+
+### With Warnings
+
+```typescript
+const registry = await loadNavaiFunctions({
+  './functions/search.ts': () => import('./functions/search'),
+  './functions/broken.ts': () => import('./functions/broken') // Module load error
+});
+
+registry.warnings.forEach(warning => {
+  console.warn(warning);
+});
+// [navai] Failed to load ./functions/broken.ts: Module not found
+```
+
+### Executing Functions
+
+```typescript
+const registry = await loadNavaiFunctions(moduleLoaders);
+
+const searchFn = registry.byName.get('search');
+if (searchFn) {
+  const result = await searchFn.run(
+    { args: ['query string', 10] },
+    { navigate: (path) => console.log('Navigate to:', path) }
+  );
+  console.log(result);
+}
+```
+
+### With Classes
+
+```typescript
+// functions/analytics.ts
+export class Analytics {
+  constructor(private apiKey: string) {}
+  
+  track(event: string) {
+    console.log(`[${this.apiKey}] Tracking:`, event);
+  }
+}
+
+// Load and execute
+const registry = await loadNavaiFunctions({
+  './functions/analytics.ts': () => import('./functions/analytics')
+});
+
+const trackFn = registry.byName.get('analytics_track');
+await trackFn.run(
+  {
+    constructorArgs: ['api-key-123'],
+    methodArgs: ['page_view']
+  },
+  { navigate: () => {} }
+);
+// Output: [api-key-123] Tracking: page_view
+```
+
+### Complete Example
+
+```typescript
+// functions/search.ts
+export function search(query: string, limit = 10) {
+  return {
+    results: [],
+    query,
+    limit
+  };
+}
+
+// functions/user.ts
+export class UserManager {
+  constructor(private db: any) {}
+  
+  getProfile(userId: string) {
+    return { id: userId, name: 'User' };
+  }
+  
+  updateProfile(userId: string, data: any) {
+    return { id: userId, ...data };
+  }
+}
+
+// functions/navigation.ts
+export default function goToPage(
+  page: string,
+  context: NavaiFunctionContext
+) {
+  context.navigate(`/${page}`);
+}
+
+// Load all functions
+const registry = await loadNavaiFunctions({
+  './functions/search.ts': () => import('./functions/search'),
+  './functions/user.ts': () => import('./functions/user'),
+  './functions/navigation.ts': () => import('./functions/navigation')
+});
+
+console.log(registry.ordered.map(f => f.name));
+// ['search', 'user_manager_get_profile', 'user_manager_update_profile', 'go_to_page']
+
+// Execute search
+const searchFn = registry.byName.get('search');
+const searchResult = await searchFn.run(
+  { args: ['typescript', 20] },
+  { navigate: () => {} }
+);
+
+// Execute class method
+const getProfileFn = registry.byName.get('user_manager_get_profile');
+const profile = await getProfileFn.run(
+  {
+    constructorArgs: [myDatabase],
+    methodArgs: ['user123']
+  },
+  { navigate: () => {} }
+);
+```
+
+## Warnings
+
+The function emits warnings for:
+
+```typescript
+// Module has no exports
+"[navai] Ignored ./functions/empty.ts: module has no exports."
+
+// Module has no callable exports
+"[navai] Ignored ./functions/constants.ts: module has no callable exports."
+
+// Class has no methods
+"[navai] Ignored ./functions/user.ts#User: class has no callable instance methods."
+
+// Object has no callable members
+"[navai] Ignored ./functions/config.ts#config: exported object has no callable members."
+
+// Duplicate function names
+"[navai] Renamed duplicated function \"search\" to \"search_2\"."
+
+// Module load error
+"[navai] Failed to load ./functions/broken.ts: Cannot find module"
+```
+
+## File Filtering
+
+TypeScript declaration files are automatically skipped:
+
+```typescript
+const registry = await loadNavaiFunctions({
+  './functions/search.ts': () => import('./functions/search'),
+  './functions/search.d.ts': () => import('./functions/search.d.ts') // Ignored
+});
+```
+
+## Types
+
+```typescript
+// packages/voice-frontend/src/functions.ts:1-21
+
+export type NavaiFunctionPayload = Record<string, unknown>;
+
+export type NavaiFunctionContext = {
+  navigate: (path: string) => void;
+};
+
+export type NavaiFunctionDefinition = {
+  name: string;
+  description: string;
+  source: string;
+  run: (payload: NavaiFunctionPayload, context: NavaiFunctionContext) => Promise<unknown> | unknown;
+};
+
+export type NavaiFunctionsRegistry = {
+  byName: Map<string, NavaiFunctionDefinition>;
+  ordered: NavaiFunctionDefinition[];
+  warnings: string[];
+};
+
+export type NavaiFunctionModuleLoaders = Record<string, () => Promise<unknown>>;
+```
+
+## Related
+
+- [buildNavaiAgent](/api/frontend/build-agent) - Uses function registry
+- [useWebVoiceAgent](/api/frontend/use-web-voice-agent) - Loads functions
+- [Types](/api/frontend/types) - Type definitions

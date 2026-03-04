@@ -1,0 +1,385 @@
+---
+title: createNavaiMobileBackendClient
+description: Backend API client for mobile voice applications
+---
+
+## Overview
+
+`createNavaiMobileBackendClient` creates a client for communicating with your backend API. It handles client secret generation, function listing, and function execution.
+
+## Import
+
+```tsx
+import { createNavaiMobileBackendClient } from '@navai/voice-mobile';
+```
+
+## Usage
+
+```tsx
+import { createNavaiMobileBackendClient } from '@navai/voice-mobile';
+
+const backendClient = createNavaiMobileBackendClient({
+  apiBaseUrl: 'https://api.example.com',
+  env: {
+    NAVAI_API_URL: 'https://api.example.com'
+  }
+});
+
+// Create client secret for realtime connection
+const { value, expires_at } = await backendClient.createClientSecret({
+  model: 'gpt-realtime',
+  voice: 'alloy'
+});
+
+// List available backend functions
+const { functions, warnings } = await backendClient.listFunctions();
+
+// Execute a backend function
+const result = await backendClient.executeFunction({
+  functionName: 'get_weather',
+  payload: { location: 'San Francisco' }
+});
+```
+
+## Type Signature
+
+```tsx
+function createNavaiMobileBackendClient(
+  options?: CreateNavaiMobileBackendClientOptions
+): NavaiMobileBackendClient
+```
+
+## Parameters
+
+<ParamField path="options" type="CreateNavaiMobileBackendClientOptions">
+  Configuration options for the backend client
+
+  <Expandable title="properties">
+    <ParamField path="apiBaseUrl" type="string">
+      Base URL for the backend API. Default: `http://localhost:3000`
+      
+      Falls back to `env.NAVAI_API_URL` if not provided.
+    </ParamField>
+
+    <ParamField path="env" type="NavaiMobileEnv">
+      Environment variables object. Example:
+      ```tsx
+      {
+        NAVAI_API_URL: 'https://api.example.com'
+      }
+      ```
+    </ParamField>
+
+    <ParamField path="fetchImpl" type="typeof fetch">
+      Custom fetch implementation. Default: global `fetch`
+    </ParamField>
+
+    <ParamField path="clientSecretPath" type="string">
+      Custom path for client secret endpoint. Default: `/navai/realtime/client-secret`
+    </ParamField>
+
+    <ParamField path="functionsListPath" type="string">
+      Custom path for functions list endpoint. Default: `/navai/functions`
+    </ParamField>
+
+    <ParamField path="functionsExecutePath" type="string">
+      Custom path for function execution endpoint. Default: `/navai/functions/execute`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Return Value
+
+<ResponseField name="createClientSecret" type="(input?: CreateRealtimeClientSecretInput) => Promise<CreateRealtimeClientSecretResult>">
+  Create a client secret for OpenAI Realtime API connection.
+
+  <Expandable title="parameters">
+    <ParamField path="input.model" type="string">
+      Model to use. Example: `gpt-realtime`, `gpt-4o-realtime-preview-2024-12-17`
+    </ParamField>
+
+    <ParamField path="input.voice" type="string">
+      Voice to use. Example: `alloy`, `echo`, `shimmer`
+    </ParamField>
+
+    <ParamField path="input.instructions" type="string">
+      Custom instructions for the session
+    </ParamField>
+
+    <ParamField path="input.language" type="string">
+      Language code. Example: `en`, `es`, `fr`
+    </ParamField>
+
+    <ParamField path="input.voiceAccent" type="string">
+      Voice accent preference
+    </ParamField>
+
+    <ParamField path="input.voiceTone" type="string">
+      Voice tone preference
+    </ParamField>
+
+    <ParamField path="input.apiKey" type="string">
+      OpenAI API key (if backend requires it in request)
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="returns">
+    <ResponseField name="value" type="string" required>
+      The ephemeral client secret token
+    </ResponseField>
+
+    <ResponseField name="expires_at" type="number">
+      Unix timestamp when the secret expires
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="listFunctions" type="() => Promise<BackendFunctionsResult>">
+  List available backend functions.
+
+  <Expandable title="returns">
+    <ResponseField name="functions" type="NavaiBackendFunctionDefinition[]">
+      Array of backend function definitions:
+      ```tsx
+      {
+        name: string;
+        description?: string;
+        source?: string;
+      }
+      ```
+    </ResponseField>
+
+    <ResponseField name="warnings" type="string[]">
+      Warnings from backend function loading
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="executeFunction" type="(input: ExecuteNavaiBackendFunctionInput) => Promise<unknown>">
+  Execute a backend function.
+
+  <Expandable title="parameters">
+    <ParamField path="input.functionName" type="string" required>
+      Name of the function to execute
+    </ParamField>
+
+    <ParamField path="input.payload" type="Record<string, unknown> | null" required>
+      Function arguments or `null`
+    </ParamField>
+  </Expandable>
+
+  Returns the function result (type depends on the function).
+  
+  **Throws** if function execution fails or returns an error.
+</ResponseField>
+
+## API Endpoints
+
+The backend client expects these endpoints:
+
+### POST /navai/realtime/client-secret
+
+Create ephemeral client secret for OpenAI Realtime API.
+
+**Request:**
+```json
+{
+  "model": "gpt-realtime",
+  "voice": "alloy"
+}
+```
+
+**Response:**
+```json
+{
+  "value": "client_secret_...",
+  "expires_at": 1234567890
+}
+```
+
+### GET /navai/functions
+
+List available backend functions.
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "name": "get_weather",
+      "description": "Get current weather",
+      "source": "backend"
+    }
+  ],
+  "warnings": []
+}
+```
+
+### POST /navai/functions/execute
+
+Execute a backend function.
+
+**Request:**
+```json
+{
+  "function_name": "get_weather",
+  "payload": { "location": "San Francisco" }
+}
+```
+
+**Response (Success):**
+```json
+{
+  "ok": true,
+  "result": {
+    "temperature": 72,
+    "condition": "sunny"
+  }
+}
+```
+
+**Response (Error):**
+```json
+{
+  "ok": false,
+  "error": "Function execution failed",
+  "details": "Location not found"
+}
+```
+
+## Examples
+
+### Basic Client
+
+```tsx
+import { createNavaiMobileBackendClient } from '@navai/voice-mobile';
+
+const client = createNavaiMobileBackendClient({
+  apiBaseUrl: 'https://api.example.com'
+});
+
+const secret = await client.createClientSecret();
+console.log('Secret expires at:', new Date(secret.expires_at * 1000));
+```
+
+### With Environment Variables
+
+```tsx
+import { createNavaiMobileBackendClient, resolveNavaiMobileEnv } from '@navai/voice-mobile';
+import Config from 'react-native-config';
+
+const env = resolveNavaiMobileEnv({
+  sources: [Config, process.env]
+});
+
+const client = createNavaiMobileBackendClient({ env });
+// Uses NAVAI_API_URL from Config or process.env
+```
+
+### Custom Endpoints
+
+```tsx
+const client = createNavaiMobileBackendClient({
+  apiBaseUrl: 'https://api.example.com',
+  clientSecretPath: '/api/voice/secret',
+  functionsListPath: '/api/voice/functions',
+  functionsExecutePath: '/api/voice/execute'
+});
+```
+
+### Error Handling
+
+```tsx
+try {
+  const result = await client.executeFunction({
+    functionName: 'get_weather',
+    payload: { location: 'Invalid' }
+  });
+  console.log('Result:', result);
+} catch (error) {
+  console.error('Execution failed:', error.message);
+}
+```
+
+### Function Discovery
+
+```tsx
+const { functions, warnings } = await client.listFunctions();
+
+if (warnings.length > 0) {
+  console.warn('Warnings:', warnings);
+}
+
+console.log('Available functions:');
+functions.forEach(fn => {
+  console.log(`- ${fn.name}: ${fn.description}`);
+});
+```
+
+### Custom Fetch (for testing)
+
+```tsx
+const mockFetch = jest.fn(async (url, options) => {
+  return {
+    ok: true,
+    json: async () => ({ value: 'mock_secret' })
+  };
+});
+
+const client = createNavaiMobileBackendClient({
+  fetchImpl: mockFetch
+});
+
+const secret = await client.createClientSecret();
+// Uses mockFetch instead of global fetch
+```
+
+## Error Handling
+
+The client throws errors in these cases:
+
+| Method | Error Condition | Error Message |
+|--------|----------------|---------------|
+| `createClientSecret` | HTTP error | Response text or `HTTP {status}` |
+| `createClientSecret` | Invalid response | `"Invalid client-secret response."` |
+| `listFunctions` | HTTP error | Returns empty functions with warning |
+| `listFunctions` | Parse error | Returns empty functions with warning |
+| `executeFunction` | HTTP error | Response text or `HTTP {status}` |
+| `executeFunction` | Invalid response | `"Invalid backend function response."` |
+| `executeFunction` | Function error | `payload.details` or `payload.error` |
+
+## Implementation Notes
+
+### URL Construction
+
+The client constructs URLs by:
+1. Removing trailing slashes from base URL
+2. Ensuring path starts with `/`
+3. Joining: `{baseUrl}{path}`
+
+### Response Parsing
+
+- `createClientSecret`: Expects `{ value: string, expires_at?: number }`
+- `listFunctions`: Expects `{ items: [], warnings: [] }`, gracefully handles errors
+- `executeFunction`: Expects `{ ok: true, result: any }` or `{ ok: false, error: string }`
+
+### Fetch Fallback
+
+If `fetchImpl` is not provided, uses global `fetch`. This allows for:
+- Custom fetch implementations
+- Testing with mock fetch
+- Network layer customization
+
+## Best Practices
+
+1. **URL Configuration**: Use environment variables for API URL
+2. **Error Handling**: Always wrap API calls in try-catch
+3. **Secret Expiration**: Monitor `expires_at` and refresh before expiry
+4. **Function Discovery**: Cache function list to reduce API calls
+5. **Timeout Handling**: Configure reasonable timeouts for fetch
+
+## See Also
+
+- [Agent Runtime API](/api/mobile/agent-runtime) - Using backend functions in agent
+- [Types Reference](/api/mobile/types) - TypeScript types
+- [useMobileVoiceAgent Hook](/api/mobile/use-mobile-voice-agent) - Integration hook

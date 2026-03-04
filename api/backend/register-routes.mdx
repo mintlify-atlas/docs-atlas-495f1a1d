@@ -1,0 +1,279 @@
+---
+title: "registerNavaiExpressRoutes"
+description: "Register Navai backend routes with Express"
+---
+
+## Function Signature
+
+```typescript
+function registerNavaiExpressRoutes(
+  app: Express,
+  options?: RegisterNavaiExpressRoutesOptions
+): void
+```
+
+**Source:** `packages/voice-backend/src/index.ts:253`
+
+## Description
+
+Registers all Navai backend routes with your Express application. This includes:
+- Client secret endpoint for OpenAI Realtime authentication
+- Function listing endpoint for tool discovery
+- Function execution endpoint for running backend tools
+
+## Parameters
+
+<ParamField path="app" type="Express" required>
+  Your Express application instance
+</ParamField>
+
+<ParamField path="options" type="RegisterNavaiExpressRoutesOptions">
+  Configuration options for route registration
+
+  <Expandable title="properties">
+    <ParamField path="env" type="Record<string, string | undefined>">
+      Environment variables object. Defaults to `process.env`
+    </ParamField>
+
+    <ParamField path="backendOptions" type="NavaiVoiceBackendOptions">
+      Backend configuration options. If not provided, defaults are loaded from environment variables via `getNavaiVoiceBackendOptionsFromEnv(env)`
+    </ParamField>
+
+    <ParamField path="includeFunctionsRoutes" type="boolean" default="true">
+      Whether to register function listing and execution routes (`/navai/functions*`)
+    </ParamField>
+
+    <ParamField path="clientSecretPath" type="string" default="/navai/realtime/client-secret">
+      Custom path for the client secret endpoint
+    </ParamField>
+
+    <ParamField path="functionsListPath" type="string" default="/navai/functions">
+      Custom path for the functions list endpoint
+    </ParamField>
+
+    <ParamField path="functionsExecutePath" type="string" default="/navai/functions/execute">
+      Custom path for the function execution endpoint
+    </ParamField>
+
+    <ParamField path="functionsBaseDir" type="string">
+      Base directory for function scanning. If not specified, uses `NAVAI_FUNCTIONS_BASE_DIR` env var or `process.cwd()`
+    </ParamField>
+
+    <ParamField path="functionsFolders" type="string">
+      Comma-separated list of folders/patterns to scan for functions. See [Function Discovery Patterns](#function-discovery-patterns)
+    </ParamField>
+
+    <ParamField path="includeExtensions" type="string[]" default='["ts", "js", "mjs", "cjs", "mts", "cts"]'>
+      File extensions to include when scanning for functions
+    </ParamField>
+
+    <ParamField path="exclude" type="string[]" default='["**/node_modules/**", "**/dist/**", "**/.*/**"]'>
+      Glob patterns to exclude from function scanning
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Return Value
+
+<ResponseField name="void" type="void">
+  This function does not return a value. It registers routes directly on the Express app.
+</ResponseField>
+
+## Registered Routes
+
+### POST /navai/realtime/client-secret
+
+Creates an ephemeral client secret for OpenAI Realtime API.
+
+**Request Body:**
+```json
+{
+  "model": "gpt-realtime",
+  "voice": "marin",
+  "instructions": "You are a helpful assistant.",
+  "language": "Spanish",
+  "voiceAccent": "neutral Latin American Spanish",
+  "voiceTone": "friendly and professional",
+  "apiKey": "sk-..."
+}
+```
+
+**Response:**
+```json
+{
+  "value": "ek_...",
+  "expires_at": 1730000000
+}
+```
+
+### GET /navai/functions
+
+Lists all available backend functions.
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "name": "secret_password",
+      "description": "Call exported function default.",
+      "source": "src/ai/functions-modules/security.ts#default"
+    }
+  ],
+  "warnings": []
+}
+```
+
+### POST /navai/functions/execute
+
+Executes a backend function by name.
+
+**Request Body:**
+```json
+{
+  "function_name": "secret_password",
+  "payload": {
+    "args": ["abc"]
+  }
+}
+```
+
+**Success Response:**
+```json
+{
+  "ok": true,
+  "function_name": "secret_password",
+  "source": "src/ai/functions-modules/security.ts#default",
+  "result": "..."
+}
+```
+
+**Error Response (Unknown Function):**
+```json
+{
+  "error": "Unknown or disallowed function.",
+  "available_functions": ["secret_password", "other_function"]
+}
+```
+
+## Function Discovery Patterns
+
+The `functionsFolders` option accepts several pattern formats:
+
+| Pattern | Description | Example |
+|---------|-------------|--------|
+| Folder | Match all files in folder | `src/ai/functions-modules` |
+| Recursive | Match all files recursively | `src/ai/functions-modules/...` |
+| Wildcard | Match using glob patterns | `src/features/*/voice-functions` |
+| Explicit File | Match specific file | `src/ai/functions-modules/secret.ts` |
+| CSV List | Match multiple patterns | `src/ai/functions-modules,...` |
+
+## Runtime Behavior
+
+<Note>
+**Important:** The function runtime is lazy-loaded once and cached in-memory.
+- First call to list/execute functions builds the registry
+- After initial load, file changes are NOT auto-reloaded
+- Restart the process to reload function definitions
+</Note>
+
+## Usage Examples
+
+### Basic Setup
+
+```typescript
+import express from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+app.use(express.json());
+
+registerNavaiExpressRoutes(app);
+
+app.listen(3000);
+```
+
+### Custom Configuration
+
+```typescript
+import express from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+app.use(express.json());
+
+registerNavaiExpressRoutes(app, {
+  backendOptions: {
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    defaultModel: "gpt-realtime",
+    defaultVoice: "marin",
+    defaultInstructions: "You are a helpful assistant.",
+    clientSecretTtlSeconds: 600,
+    allowApiKeyFromRequest: false
+  },
+  functionsBaseDir: process.cwd(),
+  functionsFolders: "src/ai/functions-modules"
+});
+
+app.listen(3000);
+```
+
+### Custom Route Paths
+
+```typescript
+import express from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+app.use(express.json());
+
+registerNavaiExpressRoutes(app, {
+  clientSecretPath: "/api/auth/realtime-token",
+  functionsListPath: "/api/tools",
+  functionsExecutePath: "/api/tools/run"
+});
+
+app.listen(3000);
+```
+
+### Disable Function Routes
+
+```typescript
+import express from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+app.use(express.json());
+
+// Only register client secret route
+registerNavaiExpressRoutes(app, {
+  includeFunctionsRoutes: false
+});
+
+app.listen(3000);
+```
+
+### Multiple Function Folders
+
+```typescript
+import express from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+app.use(express.json());
+
+registerNavaiExpressRoutes(app, {
+  functionsFolders: "src/ai/functions-modules,...,src/features/*/tools",
+  includeExtensions: ["ts", "js"],
+  exclude: ["**/node_modules/**", "**/dist/**", "**/*.test.ts"]
+});
+
+app.listen(3000);
+```
+
+## Related APIs
+
+- [getNavaiVoiceBackendOptionsFromEnv](/api/backend/client-secret#getnavaivoicebackendoptionsfromenv) - Load backend options from environment
+- [createRealtimeClientSecret](/api/backend/client-secret#createrealtimeclientsecret) - Create client secret programmatically
+- [loadNavaiFunctions](/api/backend/functions#loadnavaifunctions) - Load function registry manually
+- [resolveNavaiBackendRuntimeConfig](/api/backend/functions#resolvenavaibackendruntimeconfig) - Resolve runtime configuration

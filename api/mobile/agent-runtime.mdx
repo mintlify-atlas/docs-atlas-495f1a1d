@@ -1,0 +1,388 @@
+---
+title: createNavaiMobileAgentRuntime
+description: Create agent runtime with tools and instructions for mobile voice agents
+---
+
+## Overview
+
+`createNavaiMobileAgentRuntime` creates an agent runtime that manages tool execution, route navigation, and function calling for mobile voice agents. It generates realtime-compatible tool schemas and instructions.
+
+## Import
+
+```tsx
+import { createNavaiMobileAgentRuntime } from '@navai/voice-mobile';
+```
+
+## Usage
+
+```tsx
+import { createNavaiMobileAgentRuntime } from '@navai/voice-mobile';
+
+const agentRuntime = createNavaiMobileAgentRuntime({
+  navigate: (path) => navigation.navigate(path),
+  routes: [
+    { name: 'home', path: '/home', description: 'Home screen' },
+    { name: 'profile', path: '/profile', description: 'User profile' }
+  ],
+  functionsRegistry,
+  backendFunctions: [
+    { name: 'get_weather', description: 'Get current weather' }
+  ],
+  executeBackendFunction: async (input) => {
+    return await backendClient.executeFunction(input);
+  }
+});
+
+// Use in realtime session
+await session.sendRealtimeEvent({
+  type: 'session.update',
+  session: {
+    instructions: agentRuntime.session.instructions,
+    tools: agentRuntime.session.tools,
+    tool_choice: 'auto'
+  }
+});
+
+// Execute tool calls
+const result = await agentRuntime.executeToolCall({
+  name: 'navigate_to',
+  payload: { target: 'profile' }
+});
+```
+
+## Type Signature
+
+```tsx
+function createNavaiMobileAgentRuntime(
+  options: CreateNavaiMobileAgentRuntimeOptions
+): NavaiMobileAgentRuntime
+```
+
+## Parameters
+
+<ParamField path="options" type="CreateNavaiMobileAgentRuntimeOptions" required>
+  Configuration options for the agent runtime
+
+  <Expandable title="properties">
+    <ParamField path="navigate" type="(path: string) => void" required>
+      Navigation function called when executing navigation commands. Example:
+      ```tsx
+      navigate: (path) => navigation.navigate(path)
+      ```
+    </ParamField>
+
+    <ParamField path="routes" type="NavaiRoute[]" required>
+      Available navigation routes. Each route must have:
+      ```tsx
+      {
+        name: string;          // Route name
+        path: string;          // Route path
+        description: string;   // Description for AI
+        synonyms?: string[];   // Alternative names
+      }
+      ```
+    </ParamField>
+
+    <ParamField path="functionsRegistry" type="NavaiFunctionsRegistry" required>
+      Registry of loaded mobile functions from `loadNavaiFunctions()`.
+    </ParamField>
+
+    <ParamField path="backendFunctions" type="NavaiBackendFunctionDefinition[]">
+      Backend functions available for execution. Each function:
+      ```tsx
+      {
+        name: string;
+        description?: string;
+        source?: string;
+      }
+      ```
+    </ParamField>
+
+    <ParamField path="executeBackendFunction" type="ExecuteNavaiMobileBackendFunction">
+      Function to execute backend functions. Signature:
+      ```tsx
+      (input: ExecuteNavaiBackendFunctionInput) => Promise<unknown>
+      ```
+    </ParamField>
+
+    <ParamField path="baseInstructions" type="string">
+      Custom base instructions. Default: `"You are a voice assistant embedded in a mobile app."`
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Return Value
+
+<ResponseField name="session" type="NavaiMobileAgentRuntimeSession">
+  Session configuration for realtime API
+
+  <Expandable title="properties">
+    <ResponseField name="instructions" type="string">
+      Generated instructions including:
+      - Available routes with descriptions
+      - Available functions with descriptions
+      - Tool usage rules and guidelines
+      - Navigation and execution patterns
+    </ResponseField>
+
+    <ResponseField name="tools" type="NavaiRealtimeToolDefinition[]">
+      Realtime-compatible tool schemas:
+      - `navigate_to` - Navigate to app routes
+      - `execute_app_function` - Execute mobile/backend functions
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="warnings" type="string[]">
+  Configuration warnings:
+  - Duplicate function names
+  - Backend function conflicts with mobile functions
+  - Function loading errors
+</ResponseField>
+
+<ResponseField name="availableFunctionNames" type="string[]">
+  List of all available function names (mobile + backend).
+</ResponseField>
+
+<ResponseField name="executeToolCall" type="(input: NavaiMobileToolCallInput) => Promise<unknown>">
+  Execute a tool call from the realtime API. Handles:
+  - Navigation commands
+  - Mobile function execution
+  - Backend function execution
+  - Error handling and formatting
+</ResponseField>
+
+## Tool Schemas
+
+The runtime generates two tool schemas:
+
+### navigate_to
+
+Navigate to an allowed route in the app.
+
+```json
+{
+  "type": "function",
+  "name": "navigate_to",
+  "description": "Navigate to an allowed route in the current app.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "target": {
+        "type": "string",
+        "description": "Route name or route path. Example: perfil, ajustes, /profile, /settings"
+      }
+    },
+    "required": ["target"]
+  }
+}
+```
+
+### execute_app_function
+
+Execute an allowed internal app function.
+
+```json
+{
+  "type": "function",
+  "name": "execute_app_function",
+  "description": "Execute an allowed internal app function by name.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "function_name": {
+        "type": "string",
+        "description": "Allowed function name from the list."
+      },
+      "payload": {
+        "anyOf": [
+          { "type": "object" },
+          { "type": "null" }
+        ],
+        "description": "Payload object or null. Use payload.args for function arguments."
+      }
+    },
+    "required": ["function_name"]
+  }
+}
+```
+
+## Generated Instructions
+
+The runtime generates comprehensive instructions:
+
+```text
+You are a voice assistant embedded in a mobile app.
+
+Allowed routes:
+- home (/home)
+- profile (/profile, aliases: perfil, usuario)
+
+Allowed app functions:
+- get_user_data: Get current user information
+- update_settings: Update user settings
+- get_weather: Get current weather
+
+Rules:
+- The only valid tool names are navigate_to and execute_app_function.
+- If user asks to go/open a section, always call navigate_to.
+- If user asks to run an internal action, always call execute_app_function.
+- Always call a tool before claiming that navigation/action was completed.
+- Do not repeat greetings or the same sentence multiple times.
+...
+```
+
+## Tool Execution
+
+### Navigation Execution
+
+When `navigate_to` is called:
+
+```tsx
+// Input
+{
+  name: 'navigate_to',
+  payload: { target: 'profile' }
+}
+
+// Behavior
+1. Resolve route path from name/path/synonym
+2. Call navigate(resolvedPath)
+3. Return { ok: true, path: '/profile' }
+
+// If route not found
+{ ok: false, error: 'Unknown or disallowed route.' }
+```
+
+### Function Execution
+
+When `execute_app_function` is called:
+
+```tsx
+// Input
+{
+  name: 'execute_app_function',
+  payload: {
+    function_name: 'get_user_data',
+    payload: { userId: '123' }
+  }
+}
+
+// Behavior
+1. Look up function in mobile registry
+2. Execute function with payload and context
+3. Return result:
+{
+  ok: true,
+  function_name: 'get_user_data',
+  source: 'mobile',
+  result: { name: 'John', email: 'john@example.com' }
+}
+
+// On error
+{
+  ok: false,
+  function_name: 'get_user_data',
+  error: 'Function execution failed.',
+  details: 'Error message'
+}
+```
+
+## Examples
+
+### Basic Setup
+
+```tsx
+import { createNavaiMobileAgentRuntime, loadNavaiFunctions } from '@navai/voice-mobile';
+
+const functionsRegistry = await loadNavaiFunctions({
+  'src/ai/functions/weather.ts': () => import('./functions/weather'),
+  'src/ai/functions/user.ts': () => import('./functions/user')
+});
+
+const agentRuntime = createNavaiMobileAgentRuntime({
+  navigate: (path) => navigation.navigate(path),
+  routes: APP_ROUTES,
+  functionsRegistry,
+  baseInstructions: 'You are a helpful assistant in our mobile app.'
+});
+```
+
+### With Backend Functions
+
+```tsx
+const agentRuntime = createNavaiMobileAgentRuntime({
+  navigate: (path) => navigation.navigate(path),
+  routes,
+  functionsRegistry,
+  backendFunctions: [
+    { name: 'get_weather', description: 'Get weather for a location' },
+    { name: 'send_email', description: 'Send an email' }
+  ],
+  executeBackendFunction: async ({ functionName, payload }) => {
+    const response = await fetch('/api/functions/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ function_name: functionName, payload })
+    });
+    return response.json();
+  }
+});
+```
+
+### Handling Warnings
+
+```tsx
+const agentRuntime = createNavaiMobileAgentRuntime(options);
+
+if (agentRuntime.warnings.length > 0) {
+  console.warn('Agent runtime warnings:');
+  agentRuntime.warnings.forEach(warning => {
+    console.warn(warning);
+  });
+}
+```
+
+## Utility Functions
+
+### extractNavaiRealtimeToolCalls
+
+Extract tool calls from realtime events.
+
+```tsx
+import { extractNavaiRealtimeToolCalls } from '@navai/voice-mobile';
+
+const toolCalls = extractNavaiRealtimeToolCalls(realtimeEvent);
+// Returns: NavaiRealtimeToolCall[]
+```
+
+### buildNavaiRealtimeToolResultEvents
+
+Build tool result events to send back to realtime.
+
+```tsx
+import { buildNavaiRealtimeToolResultEvents } from '@navai/voice-mobile';
+
+const events = buildNavaiRealtimeToolResultEvents({
+  callId: 'call_123',
+  output: { ok: true, result: 'Success' }
+});
+
+for (const event of events) {
+  await session.sendRealtimeEvent(event);
+}
+```
+
+## Best Practices
+
+1. **Unique Function Names**: Ensure mobile and backend functions have unique names
+2. **Route Descriptions**: Provide clear, concise route descriptions for AI understanding
+3. **Error Handling**: Always wrap `executeToolCall` in try-catch
+4. **Warning Monitoring**: Log and monitor runtime warnings in production
+5. **Context Passing**: The `navigate` function receives the resolved path, not the original input
+
+## See Also
+
+- [useMobileVoiceAgent Hook](/api/mobile/use-mobile-voice-agent) - Main integration hook
+- [Backend Client API](/api/mobile/backend-client) - Backend function execution
+- [Types Reference](/api/mobile/types) - TypeScript types

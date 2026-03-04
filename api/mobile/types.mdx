@@ -1,0 +1,611 @@
+---
+title: Mobile Types Reference
+description: TypeScript types and interfaces for the Mobile package
+---
+
+## Overview
+
+Complete TypeScript type reference for `@navai/voice-mobile`.
+
+## Hook Types
+
+### UseMobileVoiceAgentOptions
+
+Options for `useMobileVoiceAgent` hook.
+
+```tsx
+type UseMobileVoiceAgentOptions = {
+  runtime: ResolveNavaiMobileApplicationRuntimeConfigResult | null;
+  runtimeLoading: boolean;
+  runtimeError: string | null;
+  navigate: (path: string) => void;
+};
+```
+
+<ParamField path="runtime" type="ResolveNavaiMobileApplicationRuntimeConfigResult | null" required>
+  Runtime configuration or `null` if not loaded
+</ParamField>
+
+<ParamField path="runtimeLoading" type="boolean" required>
+  Whether runtime is loading
+</ParamField>
+
+<ParamField path="runtimeError" type="string | null" required>
+  Runtime loading error
+</ParamField>
+
+<ParamField path="navigate" type="(path: string) => void" required>
+  Navigation function
+</ParamField>
+
+### UseMobileVoiceAgentResult
+
+Return type of `useMobileVoiceAgent` hook.
+
+```tsx
+type UseMobileVoiceAgentResult = {
+  status: 'idle' | 'connecting' | 'connected' | 'error';
+  error: string | null;
+  isConnecting: boolean;
+  isConnected: boolean;
+  start: () => Promise<void>;
+  stop: () => Promise<void>;
+};
+```
+
+<ResponseField name="status" type="'idle' | 'connecting' | 'connected' | 'error'">
+  Current session status
+</ResponseField>
+
+<ResponseField name="error" type="string | null">
+  Error message if status is error
+</ResponseField>
+
+<ResponseField name="isConnecting" type="boolean">
+  Convenience flag for connecting state
+</ResponseField>
+
+<ResponseField name="isConnected" type="boolean">
+  Convenience flag for connected state
+</ResponseField>
+
+<ResponseField name="start" type="() => Promise<void>">
+  Start voice session
+</ResponseField>
+
+<ResponseField name="stop" type="() => Promise<void>">
+  Stop voice session
+</ResponseField>
+
+## Agent Runtime Types
+
+### CreateNavaiMobileAgentRuntimeOptions
+
+```tsx
+type CreateNavaiMobileAgentRuntimeOptions = {
+  navigate: (path: string) => void;
+  routes: NavaiRoute[];
+  functionsRegistry: NavaiFunctionsRegistry;
+  backendFunctions?: NavaiBackendFunctionDefinition[];
+  executeBackendFunction?: ExecuteNavaiMobileBackendFunction;
+  baseInstructions?: string;
+};
+```
+
+### NavaiMobileAgentRuntime
+
+```tsx
+type NavaiMobileAgentRuntime = {
+  session: NavaiMobileAgentRuntimeSession;
+  warnings: string[];
+  availableFunctionNames: string[];
+  executeToolCall: (input: NavaiMobileToolCallInput) => Promise<unknown>;
+};
+```
+
+### NavaiMobileAgentRuntimeSession
+
+```tsx
+type NavaiMobileAgentRuntimeSession = {
+  instructions: string;
+  tools: NavaiRealtimeToolDefinition[];
+};
+```
+
+### NavaiRealtimeToolDefinition
+
+```tsx
+type NavaiRealtimeToolDefinition = {
+  type: 'function';
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+};
+```
+
+### NavaiMobileToolCallInput
+
+```tsx
+type NavaiMobileToolCallInput = {
+  name: string;
+  payload: Record<string, unknown> | null;
+};
+```
+
+### NavaiRealtimeToolCall
+
+```tsx
+type NavaiRealtimeToolCall = {
+  callId: string;
+  name?: string;
+  payload: Record<string, unknown> | null;
+};
+```
+
+### BuildNavaiRealtimeToolResultEventsInput
+
+```tsx
+type BuildNavaiRealtimeToolResultEventsInput = {
+  callId: string;
+  output: unknown;
+};
+```
+
+### ExecuteNavaiMobileBackendFunction
+
+```tsx
+type ExecuteNavaiMobileBackendFunction = (
+  input: ExecuteNavaiBackendFunctionInput
+) => Promise<unknown> | unknown;
+```
+
+## Backend Client Types
+
+### CreateNavaiMobileBackendClientOptions
+
+```tsx
+type CreateNavaiMobileBackendClientOptions = {
+  apiBaseUrl?: string;
+  env?: NavaiMobileEnv;
+  fetchImpl?: typeof fetch;
+  clientSecretPath?: string;
+  functionsListPath?: string;
+  functionsExecutePath?: string;
+};
+```
+
+### NavaiMobileBackendClient
+
+```tsx
+type NavaiMobileBackendClient = {
+  createClientSecret: (
+    input?: CreateRealtimeClientSecretInput
+  ) => Promise<CreateRealtimeClientSecretResult>;
+  listFunctions: () => Promise<BackendFunctionsResult>;
+  executeFunction: (
+    input: ExecuteNavaiBackendFunctionInput
+  ) => Promise<unknown>;
+};
+```
+
+### CreateRealtimeClientSecretInput
+
+```tsx
+type CreateRealtimeClientSecretInput = {
+  model?: string;
+  voice?: string;
+  instructions?: string;
+  language?: string;
+  voiceAccent?: string;
+  voiceTone?: string;
+  apiKey?: string;
+};
+```
+
+### CreateRealtimeClientSecretResult
+
+```tsx
+type CreateRealtimeClientSecretResult = {
+  value: string;
+  expires_at?: number;
+};
+```
+
+### NavaiBackendFunctionDefinition
+
+```tsx
+type NavaiBackendFunctionDefinition = {
+  name: string;
+  description?: string;
+  source?: string;
+};
+```
+
+### ExecuteNavaiBackendFunctionInput
+
+```tsx
+type ExecuteNavaiBackendFunctionInput = {
+  functionName: string;
+  payload: Record<string, unknown> | null;
+};
+```
+
+### BackendFunctionsResult
+
+```tsx
+type BackendFunctionsResult = {
+  functions: NavaiBackendFunctionDefinition[];
+  warnings: string[];
+};
+```
+
+### NavaiMobileEnv
+
+```tsx
+type NavaiMobileEnv = Record<string, string | undefined>;
+```
+
+## WebRTC Transport Types
+
+### CreateReactNativeWebRtcTransportOptions
+
+```tsx
+type CreateReactNativeWebRtcTransportOptions = {
+  globals: NavaiReactNativeWebRtcGlobals;
+  fetchImpl?: typeof fetch;
+  model?: string;
+  rtcConfiguration?: unknown;
+  audioConstraints?: unknown;
+  realtimeUrl?: string;
+  remoteAudioTrackVolume?: number;
+};
+```
+
+### NavaiReactNativeWebRtcGlobals
+
+```tsx
+type NavaiReactNativeWebRtcGlobals = {
+  RTCPeerConnection: new (...args: any[]) => NavaiPeerConnectionLike;
+  mediaDevices: {
+    getUserMedia: (...args: any[]) => Promise<NavaiMediaStreamLike>;
+  };
+};
+```
+
+### NavaiRealtimeTransport
+
+```tsx
+type NavaiRealtimeTransport = {
+  connect: (options: NavaiRealtimeTransportConnectOptions) => Promise<void>;
+  disconnect: () => Promise<void> | void;
+  sendEvent?: (event: unknown) => Promise<void> | void;
+  getState?: () => NavaiRealtimeTransportState;
+};
+```
+
+### NavaiRealtimeTransportConnectOptions
+
+```tsx
+type NavaiRealtimeTransportConnectOptions = {
+  clientSecret: string;
+  model?: string;
+  onEvent?: (event: unknown) => void;
+  onError?: (error: unknown) => void;
+};
+```
+
+### NavaiRealtimeTransportState
+
+```tsx
+type NavaiRealtimeTransportState = 
+  | 'idle' 
+  | 'connecting' 
+  | 'connected' 
+  | 'error' 
+  | 'closed';
+```
+
+### WebRTC Interface Types
+
+```tsx
+type NavaiPeerConnectionLike = {
+  connectionState?: string;
+  createDataChannel: (...args: any[]) => NavaiDataChannelLike;
+  addTrack: (...args: any[]) => unknown;
+  getReceivers?: () => NavaiRtpReceiverLike[];
+  createOffer: (...args: any[]) => Promise<NavaiSessionDescriptionLike>;
+  setLocalDescription: (...args: any[]) => Promise<void>;
+  setRemoteDescription: (...args: any[]) => Promise<void>;
+  close: (...args: any[]) => void;
+  onconnectionstatechange?: (() => void) | null;
+  oniceconnectionstatechange?: (() => void) | null;
+  ontrack?: ((event: NavaiTrackEventLike) => void) | null;
+};
+
+type NavaiDataChannelLike = {
+  readyState?: string;
+  send: (data: string) => void;
+  close?: () => void;
+  onmessage?: ((event: { data?: unknown }) => void) | null;
+  onerror?: ((error: unknown) => void) | null;
+  onopen?: (() => void) | null;
+  onclose?: (() => void) | null;
+};
+
+type NavaiMediaStreamLike = {
+  getTracks?: () => NavaiMediaTrackLike[];
+  getAudioTracks?: () => NavaiMediaTrackLike[];
+};
+
+type NavaiMediaTrackLike = {
+  stop?: () => void;
+  kind?: string;
+  _setVolume?: (volume: number) => void;
+};
+
+type NavaiSessionDescriptionLike = {
+  type: string;
+  sdp?: string;
+};
+
+type NavaiTrackEventLike = {
+  track?: NavaiMediaTrackLike | null;
+  streams?: NavaiMediaStreamLike[];
+};
+
+type NavaiRtpReceiverLike = {
+  track?: NavaiMediaTrackLike | null;
+};
+```
+
+## Function Types
+
+### NavaiFunctionDefinition
+
+```tsx
+type NavaiFunctionDefinition = {
+  name: string;
+  description: string;
+  source: string;
+  run: (
+    payload: NavaiFunctionPayload,
+    context: NavaiFunctionContext
+  ) => Promise<unknown> | unknown;
+};
+```
+
+### NavaiFunctionPayload
+
+```tsx
+type NavaiFunctionPayload = Record<string, unknown>;
+```
+
+### NavaiFunctionContext
+
+```tsx
+type NavaiFunctionContext = {
+  navigate: (path: string) => void;
+};
+```
+
+### NavaiFunctionsRegistry
+
+```tsx
+type NavaiFunctionsRegistry = {
+  byName: Map<string, NavaiFunctionDefinition>;
+  ordered: NavaiFunctionDefinition[];
+  warnings: string[];
+};
+```
+
+### NavaiFunctionModuleLoaders
+
+```tsx
+type NavaiFunctionModuleLoaders = Record<string, () => Promise<unknown>>;
+```
+
+## Route Types
+
+### NavaiRoute
+
+```tsx
+type NavaiRoute = {
+  name: string;
+  path: string;
+  description: string;
+  synonyms?: string[];
+};
+```
+
+## Session Types
+
+### CreateNavaiMobileVoiceSessionOptions
+
+```tsx
+type CreateNavaiMobileVoiceSessionOptions = {
+  transport: NavaiRealtimeTransport;
+  backendClient?: NavaiMobileBackendClient;
+  backendClientOptions?: CreateNavaiMobileBackendClientOptions;
+  onRealtimeEvent?: (event: unknown) => void;
+  onRealtimeError?: (error: unknown) => void;
+};
+```
+
+### NavaiMobileVoiceSession
+
+```tsx
+type NavaiMobileVoiceSession = {
+  start: (
+    input?: StartNavaiMobileVoiceSessionInput
+  ) => Promise<StartNavaiMobileVoiceSessionResult>;
+  stop: () => Promise<void>;
+  listBackendFunctions: (forceReload?: boolean) => Promise<BackendFunctionsResult>;
+  executeBackendFunction: (
+    input: ExecuteNavaiBackendFunctionInput
+  ) => Promise<unknown>;
+  sendRealtimeEvent: (event: unknown) => Promise<void>;
+  getSnapshot: () => NavaiMobileVoiceSessionSnapshot;
+};
+```
+
+### StartNavaiMobileVoiceSessionInput
+
+```tsx
+type StartNavaiMobileVoiceSessionInput = CreateRealtimeClientSecretInput & {
+  preloadBackendFunctions?: boolean;
+};
+```
+
+### StartNavaiMobileVoiceSessionResult
+
+```tsx
+type StartNavaiMobileVoiceSessionResult = {
+  clientSecret: string;
+  backendFunctions: NavaiBackendFunctionDefinition[];
+  warnings: string[];
+};
+```
+
+### NavaiMobileVoiceSessionSnapshot
+
+```tsx
+type NavaiMobileVoiceSessionSnapshot = {
+  state: NavaiMobileVoiceSessionState;
+  transportState: NavaiRealtimeTransportState | 'unknown';
+  backendFunctions: NavaiBackendFunctionDefinition[];
+  warnings: string[];
+};
+```
+
+### NavaiMobileVoiceSessionState
+
+```tsx
+type NavaiMobileVoiceSessionState = 
+  | 'idle' 
+  | 'connecting' 
+  | 'connected' 
+  | 'error';
+```
+
+## Runtime Configuration Types
+
+### NavaiMobileRuntimeEnv
+
+```tsx
+type NavaiMobileRuntimeEnv = Record<string, string | undefined> & {
+  NAVAI_API_URL?: string;
+  NAVAI_FUNCTIONS_FOLDERS?: string;
+  NAVAI_ROUTES_FILE?: string;
+  NAVAI_REALTIME_MODEL?: string;
+};
+```
+
+### ResolveNavaiMobileEnvOptions
+
+```tsx
+type ResolveNavaiMobileEnvOptions = {
+  sources?: Array<Record<string, unknown> | undefined>;
+};
+```
+
+### ResolveNavaiMobileRuntimeConfigOptions
+
+```tsx
+type ResolveNavaiMobileRuntimeConfigOptions = {
+  moduleLoaders: NavaiFunctionModuleLoaders;
+  defaultRoutes: NavaiRoute[];
+  env?: Record<string, unknown>;
+  routesFile?: string;
+  functionsFolders?: string;
+  modelOverride?: string;
+  defaultRoutesFile?: string;
+  defaultFunctionsFolder?: string;
+};
+```
+
+### ResolveNavaiMobileRuntimeConfigResult
+
+```tsx
+type ResolveNavaiMobileRuntimeConfigResult = {
+  routes: NavaiRoute[];
+  functionModuleLoaders: NavaiFunctionModuleLoaders;
+  modelOverride?: string;
+  warnings: string[];
+};
+```
+
+### ResolveNavaiMobileApplicationRuntimeConfigOptions
+
+```tsx
+type ResolveNavaiMobileApplicationRuntimeConfigOptions = 
+  ResolveNavaiMobileRuntimeConfigOptions & {
+  env?: NavaiMobileRuntimeEnv;
+  apiBaseUrl?: string;
+  defaultApiBaseUrl?: string;
+  emptyModuleLoadersWarning?: string;
+};
+```
+
+### ResolveNavaiMobileApplicationRuntimeConfigResult
+
+```tsx
+type ResolveNavaiMobileApplicationRuntimeConfigResult = 
+  ResolveNavaiMobileRuntimeConfigResult & {
+  apiBaseUrl: string;
+  env: NavaiMobileRuntimeEnv;
+};
+```
+
+## Type Guards and Utilities
+
+These are internal utilities, but useful for reference:
+
+```tsx
+// Check if value is a record
+function isRecord(value: unknown): value is Record<string, unknown>;
+
+// Check if value is a class constructor
+function isClassConstructor(value: unknown): value is new (...args: any[]) => any;
+
+// Check if value is callable
+function isCallable(value: unknown): value is (...args: any[]) => any;
+
+// Normalize function name
+function normalizeName(value: string): string;
+
+// Format error to string
+function toErrorMessage(error: unknown): string;
+```
+
+## Import Patterns
+
+### Import All Types
+
+```tsx
+import type {
+  UseMobileVoiceAgentOptions,
+  UseMobileVoiceAgentResult,
+  NavaiMobileAgentRuntime,
+  NavaiRealtimeTransport,
+  NavaiRoute,
+  NavaiFunctionDefinition
+} from '@navai/voice-mobile';
+```
+
+### Import with Functions
+
+```tsx
+import {
+  useMobileVoiceAgent,
+  createNavaiMobileAgentRuntime,
+  type UseMobileVoiceAgentOptions,
+  type NavaiRoute
+} from '@navai/voice-mobile';
+```
+
+## See Also
+
+- [useMobileVoiceAgent Hook](/api/mobile/use-mobile-voice-agent)
+- [Agent Runtime API](/api/mobile/agent-runtime)
+- [Backend Client API](/api/mobile/backend-client)
+- [WebRTC Transport](/api/mobile/webrtc-transport)

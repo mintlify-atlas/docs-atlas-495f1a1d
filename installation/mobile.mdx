@@ -1,0 +1,255 @@
+---
+title: "Installing @navai/voice-mobile"
+description: "Mobile helpers to integrate OpenAI Realtime voice with React Native applications"
+---
+
+## Overview
+
+`@navai/voice-mobile` provides a complete mobile stack for building voice-enabled React Native applications with Navai. It handles WebRTC transport, client secret retrieval, function loading, route-aware navigation, and React hook lifecycle management.
+
+## Prerequisites
+
+### Node.js Version
+
+- Node.js 18.x or later recommended
+
+### Peer Dependencies
+
+You must have the following packages installed in your React Native project:
+
+- **react**: `>=18`
+- **react-native**: `>=0.72`
+- **react-native-webrtc**: `>=124`
+
+## Installation
+
+<CodeGroup>
+
+```bash npm
+npm install @navai/voice-mobile
+```
+
+```bash yarn
+yarn add @navai/voice-mobile
+```
+
+```bash pnpm
+pnpm add @navai/voice-mobile
+```
+
+</CodeGroup>
+
+### Install Peer Dependencies
+
+If you don't already have the required packages:
+
+<CodeGroup>
+
+```bash npm
+npm install react@^18 react-native@^0.72 react-native-webrtc@^124
+```
+
+```bash yarn
+yarn add react@^18 react-native@^0.72 react-native-webrtc@^124
+```
+
+```bash pnpm
+pnpm add react@^18 react-native@^0.72 react-native-webrtc@^124
+```
+
+</CodeGroup>
+
+### React Native WebRTC Setup
+
+After installing `react-native-webrtc`, you need to complete platform-specific setup:
+
+#### iOS Setup
+
+```bash
+cd ios && pod install && cd ..
+```
+
+Add camera and microphone permissions to `ios/YourApp/Info.plist`:
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>We need access to your camera for video calls</string>
+<key>NSMicrophoneUsageDescription</key>
+<string>We need access to your microphone for voice calls</string>
+```
+
+#### Android Setup
+
+Add permissions to `android/app/src/main/AndroidManifest.xml`:
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+```
+
+## Post-Install Auto-Setup
+
+After installation, the package automatically runs a **postinstall script** that adds missing scripts to your `package.json`. This includes:
+
+- `generate:ai-modules` → Runs `navai-generate-mobile-loaders`
+- `predev` → Runs `npm run generate:ai-modules`
+- `preandroid` → Runs `npm run generate:ai-modules`
+- `preios` → Runs `npm run generate:ai-modules`
+- `pretypecheck` → Runs `npm run generate:ai-modules`
+
+**Important:** Only missing scripts are added. Existing scripts are never overwritten.
+
+### Disable Auto-Setup
+
+To skip the auto-setup, set an environment variable before installation:
+
+```bash
+NAVAI_SKIP_AUTO_SETUP=1 npm install @navai/voice-mobile
+# or
+NAVAI_SKIP_MOBILE_AUTO_SETUP=1 npm install @navai/voice-mobile
+```
+
+### Manual Setup
+
+If you skipped auto-setup, you can run it manually:
+
+```bash
+npx navai-setup-voice-mobile
+```
+
+## Environment Variables
+
+For React Native with Expo, add to `app.config.js`:
+
+```javascript
+export default {
+  expo: {
+    extra: {
+      NAVAI_API_URL: process.env.NAVAI_API_URL || "http://localhost:3000",
+      NAVAI_FUNCTIONS_FOLDERS: "src/ai/functions-modules",
+      NAVAI_ROUTES_FILE: "src/ai/routes.ts",
+      NAVAI_REALTIME_MODEL: "gpt-realtime"
+    }
+  }
+};
+```
+
+For vanilla React Native, create a `.env` file:
+
+```bash
+# Required: Backend API URL
+NAVAI_API_URL=http://localhost:3000
+
+# Optional: Function and route discovery
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+NAVAI_ROUTES_FILE=src/ai/routes.ts
+
+# Optional: Realtime model override
+NAVAI_REALTIME_MODEL=gpt-realtime
+```
+
+## CLI Tools
+
+The package includes the following CLI tools:
+
+### navai-generate-mobile-loaders
+
+Generates module loaders for your mobile voice agent functions and routes:
+
+```bash
+npx navai-generate-mobile-loaders
+```
+
+This command:
+1. Reads `.env` and process environment variables
+2. Resolves `NAVAI_FUNCTIONS_FOLDERS` and `NAVAI_ROUTES_FILE`
+3. Scans source files and selects matching modules
+4. Includes route module and referenced screen modules
+5. Writes output to `src/ai/generated-module-loaders.ts`
+
+**Flags:**
+- `--project-root <path>` - Project root directory
+- `--src-root <path>` - Source code root directory
+- `--output-file <path>` - Output file path
+- `--env-file <path>` - Custom .env file path
+- `--default-functions-folder <path>` - Default functions folder
+- `--default-routes-file <path>` - Default routes file
+- `--type-import <module>` - Custom type import
+- `--export-name <identifier>` - Custom export name
+
+## Quick Start
+
+Use the React hook in your React Native application:
+
+```typescript
+import { useMobileVoiceAgent } from "@navai/voice-mobile";
+import { useNavigation } from "@react-navigation/native";
+
+function VoiceAssistant() {
+  const navigation = useNavigation();
+  
+  const voice = useMobileVoiceAgent({
+    runtime,
+    runtimeLoading: false,
+    runtimeError: null,
+    navigate: (path) => navigation.navigate(path as never)
+  });
+
+  return (
+    <View>
+      <Button title="Start Voice Agent" onPress={voice.start} />
+      <Button title="Stop Voice Agent" onPress={voice.stop} />
+      <Text>Status: {voice.state}</Text>
+    </View>
+  );
+}
+```
+
+## Verification
+
+Run the module loader generator to verify your setup:
+
+```bash
+npm run generate:ai-modules
+```
+
+Check that `src/ai/generated-module-loaders.ts` was created successfully. The file should export:
+
+```typescript
+export const NAVAI_MOBILE_MODULE_LOADERS: NavaiFunctionModuleLoaders = {
+  // ... your module loaders
+};
+```
+
+### Test on Device/Simulator
+
+Run your app on iOS or Android:
+
+```bash
+# iOS
+npm run ios
+
+# Android
+npm run android
+```
+
+Check that microphone permissions are requested when you start the voice agent.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Mobile Configuration" icon="gear" href="/guides/environment-variables">
+    Configure runtime options, WebRTC transport, and permissions
+  </Card>
+  <Card title="Mobile Tools" icon="wrench" href="/guides/mobile-tools">
+    Create local voice agent tools for your mobile application
+  </Card>
+  <Card title="Routes & Navigation" icon="route" href="/guides/route-configuration">
+    Set up route definitions for natural language navigation
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/mobile/overview">
+    Explore the full mobile API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,817 @@
+---
+title: Function Execution Model
+description: How NAVAI discovers, loads, registers, and executes functions
+icon: "code"
+---
+
+## Overview
+
+NAVAI's function execution model enables voice-driven actions through **automatic discovery** of TypeScript/JavaScript modules. The system supports multiple export patterns, dynamic registration, and context passing for seamless integration.
+
+## Discovery and Loading
+
+### 1. Module Scanning (Backend)
+
+**Backend Runtime** (`runtime.ts:76-127`):
+
+```typescript
+async function scanModules(
+  baseDir: string,
+  extensions: string[],
+  exclude: string[]
+): Promise<IndexedModule[]> {
+  const normalizedExtensions = new Set(
+    extensions.map((ext) => ext.replace(/^\./, "").toLowerCase())
+  );
+  const excludeMatchers = exclude.map((pattern) => globToRegExp(pattern));
+  const results: IndexedModule[] = [];
+  
+  await walkDirectory(
+    baseDir,
+    baseDir,
+    normalizedExtensions,
+    excludeMatchers,
+    results
+  );
+  
+  return results;
+}
+```
+
+**Default Configuration**:
+
+```typescript
+const DEFAULT_FUNCTIONS_FOLDER = "src/ai/functions-modules";
+const DEFAULT_EXTENSIONS = ["ts", "js", "mjs", "cjs", "mts", "cts"];
+const DEFAULT_EXCLUDES = [
+  "**/node_modules/**",
+  "**/dist/**",
+  "**/.*/**" // Hidden directories
+];
+```
+
+**Environment Overrides**:
+
+```bash
+NAVAI_FUNCTIONS_BASE_DIR="/app" # Base directory for scanning
+NAVAI_FUNCTIONS_FOLDERS="src/ai/functions-modules,src/custom-functions" # Comma-separated paths
+```
+
+### 2. Path Matching (Frontend & Backend)
+
+**Pattern Syntax** (`runtime.ts:129-153`):
+
+```typescript
+function createPathMatcher(input: string): (path: string) => boolean {
+  const normalized = input.startsWith("src/") ? input : `src/${input}`;
+  
+  // Recursive match: src/ai/functions-modules/...
+  if (normalized.endsWith("/...")) {
+    const base = normalized.slice(0, -4);
+    return (path) => path.startsWith(`${base}/`);
+  }
+  
+  // Glob pattern: src/ai/**/*.fn.ts
+  if (normalized.includes("*")) {
+    const regexp = globToRegExp(normalized);
+    return (path) => regexp.test(path);
+  }
+  
+  // Exact file: src/ai/utils.ts
+  if (/\.[cm]?[jt]s$/.test(normalized)) {
+    return (path) => path === normalized;
+  }
+  
+  // Directory match: src/ai/functions-modules
+  const base = normalized.replace(/\/+$/, "");
+  return (path) => path === base || path.startsWith(`${base}/`);
+}
+```
+
+**Examples**:
+
+| Pattern | Matches |
+|---------|--------|
+| `src/ai/functions-modules` | All files in `src/ai/functions-modules/` |
+| `src/ai/functions-modules/...` | Recursive: includes subdirectories |
+| `src/ai/**/*.fn.ts` | All `.fn.ts` files in `src/ai/` tree |
+| `src/utils/helpers.ts` | Exact file match |
+
+### 3. Module Loading
+
+**Frontend** (`runtime.ts:168-173`):
+
+```typescript
+function toIndexedLoaders(
+  loaders: NavaiFunctionModuleLoaders
+): IndexedLoader[] {
+  return Object.entries(loaders).map(([rawPath, load]) => ({
+    rawPath,
+    normalizedPath: normalizePath(rawPath),
+    load // () => import(pathToFileURL(absPath).href)
+  }));
+}
+```
+
+**Backend** (`runtime.ts:66-71`):
+
+```typescript
+const functionModuleLoaders: NavaiFunctionModuleLoaders = 
+  Object.fromEntries(
+    matched.map((entry) => [
+      entry.rawPath,
+      () => import(pathToFileURL(entry.absPath).href)
+    ])
+  );
+```
+
+<Info>
+Modules are loaded **lazily** via dynamic `import()`. The registry only loads modules on first use, reducing startup time.
+</Info>
+
+## Function Registration
+
+### 1. Export Patterns
+
+**Supported Exports** (`functions.ts:236-276`):
+
+#### Default Function Export
+
+```typescript
+// src/ai/functions-modules/greet.ts
+export default function greet(name: string) {
+  return `Hello, ${name}!`;
+}
+
+// Registered as: greet
+```
+
+#### Named Function Export
+
+```typescript
+// src/ai/functions-modules/notifications.ts
+export function showSuccess(message: string) {
+  toast.success(message);
+}
+
+export function showError(message: string) {
+  toast.error(message);
+}
+
+// Registered as: show_success, show_error
+```
+
+#### Class Export
+
+```typescript
+// src/ai/functions-modules/calculator.ts
+export class Calculator {
+  add(a: number, b: number) {
+    return a + b;
+  }
+  
+  subtract(a: number, b: number) {
+    return a - b;
+  }
+}
+
+// Registered as: calculator_add, calculator_subtract
+```
+
+#### Object Export
+
+```typescript
+// src/ai/functions-modules/utils.ts
+export const utils = {
+  formatDate: (date: Date) => date.toISOString(),
+  parseJson: (str: string) => JSON.parse(str)
+};
+
+// Registered as: utils_format_date, utils_parse_json
+```
+
+### 2. Name Normalization
+
+**Algorithm** (`functions.ts:28-34`):
+
+```typescript
+function normalizeName(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2") // CamelCase → snake_case
+    .replace(/[^a-zA-Z0-9]+/g, "_") // Non-alphanumeric → _
+    .replace(/^_+|_+$/g, "") // Trim underscores
+    .toLowerCase();
+}
+```
+
+**Examples**:
+
+| Original | Normalized |
+|----------|------------|
+| `myFunction` | `my_function` |
+| `SendEmail` | `send_email` |
+| `get-user-profile` | `get_user_profile` |
+| `showNotification` | `show_notification` |
+| `Calculator.add` | `calculator_add` |
+
+### 3. Duplicate Handling
+
+**Uniqueness** (`functions.ts:129-144`):
+
+```typescript
+function uniqueName(baseName: string, usedNames: Set<string>): string {
+  const candidate = normalizeName(baseName) || "fn";
+  
+  if (!usedNames.has(candidate)) {
+    usedNames.add(candidate);
+    return candidate;
+  }
+  
+  // Append numeric suffix: my_function_2, my_function_3, ...
+  let index = 2;
+  while (usedNames.has(`${candidate}_${index}`)) {
+    index += 1;
+  }
+  
+  const finalName = `${candidate}_${index}`;
+  usedNames.add(finalName);
+  return finalName;
+}
+```
+
+**Warning Example**:
+
+```
+[navai] Renamed duplicated function "send_email" to "send_email_2".
+```
+
+### 4. Registry Construction
+
+**Loading Process** (`functions.ts:278-320`):
+
+```typescript
+export async function loadNavaiFunctions(
+  functionModuleLoaders: NavaiFunctionModuleLoaders
+): Promise<NavaiFunctionsRegistry> {
+  const byName = new Map<string, NavaiFunctionDefinition>();
+  const ordered: NavaiFunctionDefinition[] = [];
+  const warnings: string[] = [];
+  const usedNames = new Set<string>();
+  
+  // Sort loaders by path for deterministic order
+  const entries = Object.entries(functionModuleLoaders)
+    .filter(([path]) => !path.endsWith(".d.ts"))
+    .sort(([a], [b]) => a.localeCompare(b));
+  
+  for (const [path, load] of entries) {
+    try {
+      const imported = await load();
+      const exportEntries = Object.entries(imported);
+      
+      if (exportEntries.length === 0) {
+        warnings.push(`[navai] Ignored ${path}: module has no exports.`);
+        continue;
+      }
+      
+      for (const [exportName, value] of exportEntries) {
+        const { defs, warnings: exportWarnings } = 
+          collectFromExportValue(path, exportName, value, usedNames);
+        
+        warnings.push(...exportWarnings);
+        
+        for (const definition of defs) {
+          byName.set(definition.name, definition);
+          ordered.push(definition);
+        }
+      }
+    } catch (error) {
+      warnings.push(`[navai] Failed to load ${path}: ${error.message}`);
+    }
+  }
+  
+  return { byName, ordered, warnings };
+}
+```
+
+**Registry Structure**:
+
+```typescript
+export type NavaiFunctionsRegistry = {
+  byName: Map<string, NavaiFunctionDefinition>; // Fast lookup
+  ordered: NavaiFunctionDefinition[]; // Deterministic iteration
+  warnings: string[]; // Load/registration issues
+};
+
+export type NavaiFunctionDefinition = {
+  name: string; // Normalized name (e.g., "show_notification")
+  description: string; // Auto-generated or custom
+  source: string; // Module path (e.g., "src/ai/functions-modules/ui.ts#showNotification")
+  run: (payload: NavaiFunctionPayload, context: NavaiFunctionContext) => Promise<unknown>;
+};
+```
+
+## Invocation Model
+
+### 1. Payload Structure
+
+**Types** (`functions.ts:1-3`):
+
+```typescript
+export type NavaiFunctionPayload = Record<string, unknown>;
+export type NavaiFunctionContext = Record<string, unknown>;
+```
+
+**Common Payload Patterns**:
+
+```typescript
+// 1. Direct arguments array
+{ args: ["Alice", 30] }
+
+// 2. Single value
+{ value: "Hello" }
+
+// 3. Named parameters
+{ message: "Success!", duration: 3000 }
+
+// 4. Class constructor + method args
+{ constructorArgs: [config], methodArgs: [userId] }
+```
+
+### 2. Argument Resolution
+
+**Function Invocation** (`functions.ts:64-79`):
+
+```typescript
+function buildInvocationArgs(
+  payload: NavaiFunctionPayload,
+  context: NavaiFunctionContext,
+  targetArity: number
+): unknown[] {
+  // 1. Check for explicit args/arguments
+  const directArgs = readArray(payload.args ?? payload.arguments);
+  const args = directArgs.length > 0 ? [...directArgs] : [];
+  
+  // 2. Fallback to payload.value
+  if (args.length === 0 && "value" in payload) {
+    args.push(payload.value);
+  }
+  // 3. Fallback to entire payload object
+  else if (args.length === 0 && Object.keys(payload).length > 0) {
+    args.push(payload);
+  }
+  
+  // 4. Append context if function expects it
+  if (targetArity > args.length) {
+    args.push(context);
+  }
+  
+  return args;
+}
+```
+
+**Examples**:
+
+```typescript
+// Function: greet(name: string, context: Context)
+// Arity: 2
+
+// Payload: { args: ["Alice"] }
+// Invocation: greet("Alice", context)
+
+// Payload: { value: "Alice" }
+// Invocation: greet("Alice", context)
+
+// Payload: { name: "Alice" }
+// Invocation: greet({ name: "Alice" }, context)
+```
+
+### 3. Function Wrapper
+
+**Plain Function** (`functions.ts:81-96`):
+
+```typescript
+function makeFunctionDefinition(
+  name: string,
+  description: string,
+  source: string,
+  callable: AnyCallable
+): NavaiFunctionDefinition {
+  return {
+    name,
+    description,
+    source,
+    run: async (payload, context) => {
+      const args = buildInvocationArgs(payload, context, callable.length);
+      return await callable(...args);
+    }
+  };
+}
+```
+
+**Class Method** (`functions.ts:98-127`):
+
+```typescript
+function makeClassMethodDefinition(
+  name: string,
+  description: string,
+  source: string,
+  ClassRef: AnyClass,
+  method: AnyCallable
+): NavaiFunctionDefinition {
+  return {
+    name,
+    description,
+    source,
+    run: async (payload, context) => {
+      // 1. Extract constructor args
+      const constructorArgs = readArray(payload.constructorArgs);
+      
+      // 2. Extract method args
+      const methodArgsFromPayload = readArray(payload.methodArgs);
+      const args =
+        methodArgsFromPayload.length > 0
+          ? [...methodArgsFromPayload]
+          : buildInvocationArgs(payload, context, method.length);
+      
+      // 3. Instantiate class
+      const instance = new ClassRef(...constructorArgs);
+      
+      // 4. Bind and invoke method
+      const boundMethod = method.bind(instance);
+      
+      if (methodArgsFromPayload.length > 0 && method.length > args.length) {
+        args.push(context);
+      }
+      
+      return await boundMethod(...args);
+    }
+  };
+}
+```
+
+### 4. Context Passing
+
+**Frontend Context** (`agent.ts:26-33`):
+
+```typescript
+export type BuildNavaiAgentOptions = NavaiFunctionContext & {
+  routes: NavaiRoute[];
+  functionModuleLoaders?: NavaiFunctionModuleLoaders;
+  backendFunctions?: NavaiBackendFunctionDefinition[];
+  executeBackendFunction?: ExecuteNavaiBackendFunction;
+  agentName?: string;
+  baseInstructions?: string;
+};
+```
+
+**Common Context Properties**:
+
+```typescript
+const context: NavaiFunctionContext = {
+  navigate: (path: string) => router.push(path),
+  req: expressRequest, // Backend only
+  user: currentUser,
+  // ... any custom properties
+};
+```
+
+**Usage Example**:
+
+```typescript
+// src/ai/functions-modules/navigation.ts
+export function goToProfile(
+  userId: string,
+  context: NavaiFunctionContext
+) {
+  context.navigate(`/profile/${userId}`);
+  return { ok: true, userId };
+}
+
+// Invocation
+// Payload: { args: ["user_123"] }
+// Calls: goToProfile("user_123", { navigate, ... })
+```
+
+## Tool Schema Generation
+
+### 1. Direct Function Tools
+
+**Frontend Agent** (`agent.ts:200-215`):
+
+```typescript
+const directFunctionTools = directFunctionToolNames.map((functionName) =>
+  tool({
+    name: functionName,
+    description: `Direct alias for execute_app_function("${functionName}").`,
+    parameters: z.object({
+      payload: z
+        .record(z.string(), z.unknown())
+        .nullable()
+        .optional()
+        .describe(
+          "Payload object. Optional. Use payload.args as array for function args."
+        )
+    }),
+    execute: async ({ payload }) => 
+      await executeAppFunction(functionName, payload ?? null)
+  })
+);
+```
+
+**Mobile Agent** (`~/workspace/source/packages/voice-mobile/src/agent.ts:139-188`):
+
+```typescript
+function buildToolSchemas(): NavaiRealtimeToolDefinition[] {
+  return [
+    {
+      type: "function",
+      name: "navigate_to",
+      description: "Navigate to an allowed route in the current app.",
+      parameters: {
+        type: "object",
+        properties: {
+          target: {
+            type: "string",
+            description: "Route name or route path. Example: perfil, /settings"
+          }
+        },
+        required: ["target"],
+        additionalProperties: false
+      }
+    },
+    {
+      type: "function",
+      name: "execute_app_function",
+      description: "Execute an allowed internal app function by name.",
+      parameters: {
+        type: "object",
+        properties: {
+          function_name: {
+            type: "string",
+            description: "Allowed function name from the list."
+          },
+          payload: {
+            anyOf: [
+              { type: "object", additionalProperties: true },
+              { type: "null" }
+            ],
+            description: "Payload object. Use null when no arguments are needed."
+          }
+        },
+        required: ["function_name"],
+        additionalProperties: false
+      }
+    }
+  ];
+}
+```
+
+### 2. Tool Name Validation
+
+**Reserved Names** (`agent.ts:40-41`):
+
+```typescript
+const RESERVED_TOOL_NAMES = new Set(["navigate_to", "execute_app_function"]);
+const TOOL_NAME_REGEXP = /^[a-zA-Z0-9_-]{1,64}$/;
+```
+
+**Filtering** (`agent.ts:84-106`):
+
+```typescript
+const directFunctionToolNames = [...new Set(availableFunctionNames)]
+  .map((name) => name.trim().toLowerCase())
+  .filter((name) => {
+    if (!name) return false;
+    
+    if (RESERVED_TOOL_NAMES.has(name)) {
+      aliasWarnings.push(
+        `[navai] Function "${name}" is available only via execute_app_function."
+      );
+      return false;
+    }
+    
+    if (!TOOL_NAME_REGEXP.test(name)) {
+      aliasWarnings.push(
+        `[navai] Function "${name}" is available only via execute_app_function (invalid tool id)."
+      );
+      return false;
+    }
+    
+    return true;
+  });
+```
+
+## Backend vs Frontend Execution
+
+### Decision Matrix
+
+| Capability | Frontend | Backend |
+|------------|----------|--------|
+| UI navigation | ✅ | ❌ |
+| Local state access | ✅ | ❌ |
+| Database queries | ❌ | ✅ |
+| API calls | ⚠️ (CORS) | ✅ |
+| File system access | ❌ | ✅ |
+| Authentication | ⚠️ (tokens) | ✅ (sessions) |
+
+### Execution Flow
+
+**Frontend-First** (`agent.ts:108-163`):
+
+```typescript
+const executeAppFunction = async (
+  requestedName: string,
+  payload: Record<string, unknown> | null
+) => {
+  const requested = requestedName.trim().toLowerCase();
+  
+  // 1. Try frontend registry
+  const frontendDefinition = functionsRegistry.byName.get(requested);
+  if (frontendDefinition) {
+    try {
+      const result = await frontendDefinition.run(payload ?? {}, options);
+      return {
+        ok: true,
+        function_name: frontendDefinition.name,
+        source: frontendDefinition.source,
+        result
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        function_name: frontendDefinition.name,
+        error: "Function execution failed.",
+        details: toErrorMessage(error)
+      };
+    }
+  }
+  
+  // 2. Try backend registry
+  const backendDefinition = backendFunctionsByName.get(requested);
+  if (!backendDefinition) {
+    return {
+      ok: false,
+      error: "Unknown or disallowed function.",
+      available_functions: availableFunctionNames
+    };
+  }
+  
+  // 3. Call backend
+  if (!options.executeBackendFunction) {
+    return {
+      ok: false,
+      function_name: backendDefinition.name,
+      error: "Backend function execution is not configured."
+    };
+  }
+  
+  try {
+    const result = await options.executeBackendFunction({
+      functionName: backendDefinition.name,
+      payload: payload ?? null
+    });
+    
+    return {
+      ok: true,
+      function_name: backendDefinition.name,
+      source: backendDefinition.source ?? "backend",
+      result
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      function_name: backendDefinition.name,
+      error: "Function execution failed.",
+      details: toErrorMessage(error)
+    };
+  }
+};
+```
+
+### Backend Execution
+
+**HTTP Endpoint** (`~/workspace/source/packages/voice-backend/src/index.ts:298-330`):
+
+```typescript
+app.post(functionsExecutePath, async (req: Request, res: Response) => {
+  const runtime = await getRuntime();
+  const input = req.body as { function_name?: unknown; payload?: unknown };
+  const functionName = typeof input?.function_name === "string"
+    ? input.function_name.trim().toLowerCase()
+    : "";
+  
+  if (!functionName) {
+    res.status(400).json({ error: "function_name is required." });
+    return;
+  }
+  
+  const definition = runtime.registry.byName.get(functionName);
+  if (!definition) {
+    res.status(404).json({
+      error: "Unknown or disallowed function.",
+      available_functions: runtime.registry.ordered.map((item) => item.name)
+    });
+    return;
+  }
+  
+  const payload = isObjectRecord(input?.payload) ? input.payload : {};
+  const result = await definition.run(payload, { req });
+  
+  res.json({
+    ok: true,
+    function_name: definition.name,
+    source: definition.source,
+    result
+  });
+});
+```
+
+## Best Practices
+
+### 1. Function Design
+
+```typescript
+// ✅ Good: Single responsibility, clear parameters
+export async function sendEmail(
+  params: { to: string; subject: string; body: string }
+) {
+  await emailService.send(params);
+  return { ok: true, messageId: "abc123" };
+}
+
+// ❌ Bad: Multiple concerns, unclear signature
+export function doStuff(data: any, flag: boolean, opts?: unknown) {
+  // ...
+}
+```
+
+### 2. Error Handling
+
+```typescript
+// ✅ Good: Descriptive errors
+export async function deleteUser(userId: string) {
+  if (!userId) {
+    throw new Error("userId is required");
+  }
+  
+  const user = await db.users.findById(userId);
+  if (!user) {
+    throw new Error(`User ${userId} not found`);
+  }
+  
+  await db.users.delete(userId);
+  return { ok: true, userId };
+}
+```
+
+### 3. Context Usage
+
+```typescript
+// ✅ Good: Type-safe context
+type AppContext = {
+  navigate: (path: string) => void;
+  user: { id: string; name: string };
+};
+
+export function viewProfile(_: unknown, context: AppContext) {
+  context.navigate(`/profile/${context.user.id}`);
+}
+
+// ❌ Bad: Unchecked context
+export function viewProfile(_: unknown, context: any) {
+  context.navigate(context.user.id); // No type safety
+}
+```
+
+### 4. Documentation
+
+```typescript
+/**
+ * Sends a notification to the user.
+ * @param message - The notification message to display
+ * @param type - Notification type: "success" | "error" | "info"
+ */
+export function notify(
+  params: { message: string; type: string }
+) {
+  toast[params.type](params.message);
+  return { ok: true };
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="UI Navigation" icon="route" href="/concepts/ui-navigation">
+    Learn about route resolution and navigation
+  </Card>
+  <Card title="Functions Reference" icon="function" href="/guides/function-modules">
+    See example function implementations
+  </Card>
+  <Card title="Backend Functions" icon="server" href="/api/backend/functions">
+    Create backend-only functions
+  </Card>
+  <Card title="Frontend Functions" icon="react" href="/api/frontend/functions">
+    Create client-side functions
+  </Card>
+</CardGroup>

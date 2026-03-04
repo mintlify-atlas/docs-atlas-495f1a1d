@@ -1,0 +1,308 @@
+---
+title: "POST /navai/functions/execute"
+description: "Execute a backend function by name with provided arguments"
+---
+
+## Endpoint
+
+```
+POST /navai/functions/execute
+```
+
+Executes a backend function from the loaded registry. Only functions discovered via `NAVAI_FUNCTIONS_FOLDERS` can be executed. This endpoint is typically called by AI agents during voice interactions.
+
+## Authentication
+
+No authentication required. This endpoint is public by default. Implement your own authentication middleware if needed.
+
+## Request Headers
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`
+</ParamField>
+
+## Request Body
+
+<ParamField body="function_name" type="string" required>
+  The normalized name of the function to execute (snake_case lowercase). Must match a name from `GET /navai/functions`.
+</ParamField>
+
+<ParamField body="payload" type="object">
+  Arguments to pass to the function. Structure depends on the function signature and invocation style.
+  
+  <ParamField body="payload.args" type="array">
+    Explicit array of arguments. If present, used directly as function arguments.
+  </ParamField>
+  
+  <ParamField body="payload.value" type="any">
+    Single value argument. If `args` is not present, this becomes the first argument.
+  </ParamField>
+  
+  <ParamField body="payload.constructorArgs" type="array">
+    For class methods: arguments to pass to the class constructor.
+  </ParamField>
+  
+  <ParamField body="payload.methodArgs" type="array">
+    For class methods: arguments to pass to the method.
+  </ParamField>
+</ParamField>
+
+## Response
+
+### Success Response
+
+<ResponseField name="ok" type="boolean" required>
+  Always `true` for successful executions
+</ResponseField>
+
+<ResponseField name="function_name" type="string" required>
+  The normalized name of the executed function
+</ResponseField>
+
+<ResponseField name="source" type="string" required>
+  Source file path and export name in format `path/to/file.ts#exportName`
+</ResponseField>
+
+<ResponseField name="result" type="any" required>
+  The return value from the executed function. Can be any JSON-serializable value.
+</ResponseField>
+
+## Example Requests
+
+### Basic Function Call
+
+```bash
+curl -X POST http://localhost:3000/navai/functions/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "function_name": "get_weather",
+    "payload": {
+      "args": ["San Francisco"]
+    }
+  }'
+```
+
+### Using `value` Instead of `args`
+
+```bash
+curl -X POST http://localhost:3000/navai/functions/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "function_name": "get_weather",
+    "payload": {
+      "value": "San Francisco"
+    }
+  }'
+```
+
+### Object as First Argument
+
+```bash
+curl -X POST http://localhost:3000/navai/functions/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "function_name": "send_email",
+    "payload": {
+      "to": "user@example.com",
+      "subject": "Hello",
+      "body": "Test message"
+    }
+  }'
+```
+
+If `args` and `value` are not present, the entire payload object becomes the first argument.
+
+### Class Method Execution
+
+```bash
+curl -X POST http://localhost:3000/navai/functions/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "function_name": "database_client_query",
+    "payload": {
+      "constructorArgs": ["postgresql://localhost/mydb"],
+      "methodArgs": ["SELECT * FROM users WHERE id = $1", [123]]
+    }
+  }'
+```
+
+## Example Success Response
+
+```json
+{
+  "ok": true,
+  "function_name": "get_weather",
+  "source": "src/ai/functions-modules/weather.ts#getWeather",
+  "result": {
+    "temperature": 72,
+    "condition": "sunny",
+    "humidity": 65
+  }
+}
+```
+
+## Error Responses
+
+### 400 - Missing Function Name
+
+```json
+{
+  "error": "function_name is required."
+}
+```
+
+Occurs when `function_name` is missing, empty, or not a string.
+
+### 404 - Unknown Function
+
+```json
+{
+  "error": "Unknown or disallowed function.",
+  "available_functions": [
+    "get_weather",
+    "send_email",
+    "secret_password"
+  ]
+}
+```
+
+Occurs when the requested `function_name` is not in the loaded registry. The response includes a list of available functions.
+
+### 500 - Execution Error
+
+```json
+{
+  "error": "Function execution failed: TypeError: Cannot read property 'x' of undefined"
+}
+```
+
+Occurs when the function throws an error during execution. The error message includes the original error details.
+
+### 500 - Runtime Loading Error
+
+```json
+{
+  "error": "Failed to load functions runtime: ..."
+}
+```
+
+Occurs when the function discovery or loading process encounters a fatal error.
+
+## Argument Resolution
+
+The runtime resolves function arguments using this priority:
+
+1. **If `payload.args` exists**: Use as argument list directly
+   ```json
+   { "payload": { "args": ["arg1", "arg2"] } }
+   ```
+   → `fn("arg1", "arg2")`
+
+2. **Else if `payload.value` exists**: Use as first argument
+   ```json
+   { "payload": { "value": "arg1" } }
+   ```
+   → `fn("arg1")`
+
+3. **Else if payload has keys**: Use entire payload as first argument
+   ```json
+   { "payload": { "name": "John", "age": 30 } }
+   ```
+   → `fn({ name: "John", age: 30 })`
+
+4. **If function arity expects one more argument**: Append context
+   ```typescript
+   function myFn(data: object, context: NavaiFunctionContext)
+   ```
+   Context includes `{ req }` (Express Request object)
+
+## Class Method Handling
+
+For functions derived from class methods:
+
+```typescript
+// src/ai/functions-modules/database.ts
+export class DatabaseClient {
+  constructor(connectionString: string) { /* ... */ }
+  query(sql: string, params: any[]) { /* ... */ }
+}
+```
+
+Execute with:
+
+```json
+{
+  "function_name": "database_client_query",
+  "payload": {
+    "constructorArgs": ["postgresql://localhost/mydb"],
+    "methodArgs": ["SELECT * FROM users", []]
+  }
+}
+```
+
+The runtime will:
+1. Instantiate the class: `new DatabaseClient("postgresql://localhost/mydb")`
+2. Call the method: `instance.query("SELECT * FROM users", [])`
+
+## Context Object
+
+If your function signature expects a context parameter, it will receive:
+
+```typescript
+type NavaiFunctionContext = {
+  req: Express.Request; // Express request object
+};
+```
+
+Example function using context:
+
+```typescript
+export function getUserProfile(
+  userId: string,
+  context: NavaiFunctionContext
+) {
+  const authHeader = context.req.headers.authorization;
+  // Use auth header to validate request
+  return { userId, name: "John Doe" };
+}
+```
+
+## Security Considerations
+
+- Only functions from configured `NAVAI_FUNCTIONS_FOLDERS` can be executed
+- Function names are normalized and validated before execution
+- Unknown function names are rejected with 404
+- The endpoint is public by default - implement authentication middleware if needed
+- Function code runs in the same process as your Express server
+- Be cautious about exposing sensitive operations through this endpoint
+
+## Runtime Behavior
+
+- Function runtime is **lazy-loaded** on first request
+- Runtime is **cached in-memory** after initial load
+- File changes require **process restart** to take effect
+- Both `GET /navai/functions` and `POST /navai/functions/execute` share the same runtime instance
+
+## Configuration
+
+Control function execution with `RegisterNavaiExpressRoutesOptions`:
+
+```typescript
+registerNavaiExpressRoutes(app, {
+  includeFunctionsRoutes: true, // Enable functions routes
+  functionsExecutePath: "/navai/functions/execute", // Custom path
+  functionsBaseDir: process.cwd(), // Base directory for scanning
+  functionsFolders: "src/ai/functions-modules", // Folders to scan
+  includeExtensions: ["ts", "js", "mjs"], // File extensions
+  exclude: ["node_modules", "dist"] // Exclude patterns
+});
+```
+
+## Environment Variables
+
+- `NAVAI_FUNCTIONS_FOLDERS`: Comma-separated list of folders/patterns to scan
+- `NAVAI_FUNCTIONS_BASE_DIR`: Base directory for relative paths (default: `process.cwd()`)
+
+## Implementation
+
+Implemented in `packages/voice-backend/src/index.ts:298-330` via `registerNavaiExpressRoutes`.

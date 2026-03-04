@@ -1,0 +1,487 @@
+---
+title: Custom Function Examples
+description: Complete examples of custom functions from NAVAI playground apps
+---
+
+Custom functions extend your voice agent's capabilities beyond navigation. This page shows real examples from the playground apps.
+
+## Function Discovery
+
+NAVAI automatically discovers functions from the `functions-modules/` directory:
+
+```
+src/ai/functions-modules/
+├── session/
+│   └── logout.fn.ts
+├── support/
+│   └── open-help.fn.ts
+├── utils/
+│   └── math.ts
+├── test/
+│   └── testing.ts
+└── system/
+    └── ai-service.ts
+```
+
+Run the generator to create module loaders:
+
+```bash
+# Web
+npm run generate:module-loaders
+
+# Mobile
+npm run generate:ai-modules
+```
+
+## Authentication Functions
+
+### Logout User
+
+A function that clears authentication and navigates home:
+
+```typescript
+// src/ai/functions-modules/session/logout.fn.ts
+
+/**
+ * Logs out the current user by clearing auth tokens and redirecting to home.
+ * The agent can call this when user says "logout", "sign out", "cierra sesion", etc.
+ */
+export function logout_user(context: { navigate: (path: string) => void }) {
+  try {
+    // Clear authentication tokens from localStorage
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("refresh_token");
+  } catch {
+    // Ignore storage errors to avoid breaking other functions.
+    // Some environments (incognito mode) may restrict localStorage.
+  }
+
+  // Navigate user to home page
+  context.navigate("/");
+  
+  // Return success result
+  return { ok: true, message: "Session closed." };
+}
+```
+
+**Voice commands:**
+- "logout"
+- "sign out"
+- "cierra sesion"
+- "log me out"
+
+**Key features:**
+- Receives `context` with `navigate` function
+- Performs side effects (clear storage)
+- Returns structured result
+- Error handling for edge cases
+
+## Navigation Functions
+
+### Open Help Center
+
+Navigate to the help page:
+
+```typescript
+// src/ai/functions-modules/support/open-help.fn.ts
+
+/**
+ * Opens the help center page.
+ * Can be invoked by saying "open help", "need support", "ayuda", etc.
+ */
+export const open_help_center = (context: { navigate: (path: string) => void }) => {
+  // Navigate to help page
+  context.navigate("/help");
+  
+  // Return the path for confirmation
+  return { ok: true, path: "/help" };
+};
+```
+
+**Voice commands:**
+- "open help"
+- "need support"
+- "ayuda"
+- "help center"
+
+## Utility Functions
+
+### Math Operations
+
+Export multiple utility functions from a single module:
+
+```typescript
+// src/ai/functions-modules/utils/math.ts
+
+/**
+ * Adds two numbers together.
+ */
+export function sumar(a: number, b: number): number {
+  return a + b;
+}
+
+/**
+ * Checks if a person is an adult (18 or older).
+ */
+export const es_mayor_de_edad = (edad: number): boolean => {
+  return edad >= 18;
+};
+
+/**
+ * Module version - exported constants are ignored by generator.
+ */
+export const version = "1.0.0";
+```
+
+**Voice commands:**
+- "suma 5 y 3" (calls `sumar(5, 3)`)
+- "es mayor de edad 25" (calls `es_mayor_de_edad(25)`)
+
+<Note>
+  Exported constants and non-function exports are automatically ignored by the module generator.
+</Note>
+
+## Class-Based Functions
+
+### Service Initialization
+
+Export classes that the agent can instantiate:
+
+```typescript
+// src/ai/functions-modules/system/ai-service.ts
+
+/**
+ * AI service management class.
+ * The agent can create instances and call methods.
+ */
+export default class ServicioIA {
+  constructor(private readonly apiKey: string = "demo-key") {}
+
+  /**
+   * Initialize the AI service.
+   */
+  iniciar(): string {
+    return `Servicio iniciado con key: ${this.apiKey}`;
+  }
+}
+```
+
+**Voice interaction:**
+- "initialize AI service"
+- "start AI with key abc123"
+
+The agent can:
+1. Instantiate the class: `new ServicioIA("abc123")`
+2. Call methods: `instance.iniciar()`
+
+## Testing Functions
+
+### Secret Word Retrieval
+
+Simple function for testing:
+
+```typescript
+// src/ai/functions-modules/test/testing.ts
+
+/**
+ * Returns a secret word for testing purposes.
+ */
+export function secret_word(a: string): string {
+  return "45_JOSE_MARIA_45";
+}
+
+/**
+ * Module version.
+ */
+export const version = "1.0.0";
+```
+
+**Voice command:**
+- "what's the secret word"
+- "tell me the secret"
+
+## Advanced Patterns
+
+### Async Operations
+
+Functions can be async:
+
+```typescript
+export async function fetch_user_data(context: { navigate: (path: string) => void }) {
+  try {
+    const response = await fetch("/api/user");
+    const data = await response.json();
+    return { ok: true, data };
+  } catch (error) {
+    return { ok: false, error: String(error) };
+  }
+}
+```
+
+### Error Handling
+
+Return structured errors:
+
+```typescript
+export function risky_operation(value: number) {
+  if (value < 0) {
+    return { ok: false, error: "Value must be positive" };
+  }
+  
+  try {
+    const result = performOperation(value);
+    return { ok: true, result };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+}
+```
+
+### Multiple Context Parameters
+
+Access different context values:
+
+```typescript
+type Context = {
+  navigate: (path: string) => void;
+  user?: { id: string; name: string };
+  config?: Record<string, unknown>;
+};
+
+export function personalized_greeting(context: Context) {
+  const userName = context.user?.name ?? "Guest";
+  return { ok: true, message: `Welcome, ${userName}!` };
+}
+```
+
+## Function Naming
+
+### Conventions
+
+- Use snake_case for function names: `logout_user`, `open_help_center`
+- Use descriptive names: `es_mayor_de_edad` instead of `check`
+- Export functions directly: `export function ...` or `export const ... = ...`
+- Use `.fn.ts` suffix for single-function files (optional but recommended)
+
+### Discovery Rules
+
+<Warning>
+  Only **exported functions** are discovered. Constants, types, and interfaces are ignored.
+</Warning>
+
+The generator finds:
+- Regular functions: `export function name() {}`
+- Arrow functions: `export const name = () => {}`
+- Default exports that are functions or classes
+- Methods of default exported classes
+
+The generator ignores:
+- Unexported functions
+- Exported constants (unless they're functions)
+- Type definitions
+- Interfaces
+
+## Context Object
+
+Every function receives a `context` parameter:
+
+```typescript
+type NavaiContext = {
+  // Navigate to a route by path
+  navigate: (path: string) => void;
+  
+  // Additional properties can be added by your app
+  [key: string]: unknown;
+};
+```
+
+### Custom Context
+
+Extend the context with app-specific data:
+
+```typescript
+// In your VoiceNavigator setup
+const agent = useWebVoiceAgent({
+  navigate,
+  moduleLoaders: NAVAI_WEB_MODULE_LOADERS,
+  defaultRoutes: NAVAI_ROUTE_ITEMS,
+  
+  // Custom context passed to all functions
+  customContext: {
+    user: currentUser,
+    theme: currentTheme,
+    appVersion: "1.0.0"
+  }
+});
+```
+
+Functions can access custom context:
+
+```typescript
+export function get_app_info(context: any) {
+  return {
+    ok: true,
+    version: context.appVersion,
+    user: context.user?.name
+  };
+}
+```
+
+## File Organization
+
+### By Feature
+
+Organize functions by domain:
+
+```
+functions-modules/
+├── auth/
+│   ├── login.fn.ts
+│   ├── logout.fn.ts
+│   └── reset-password.fn.ts
+├── profile/
+│   ├── update-bio.fn.ts
+│   └── upload-avatar.fn.ts
+└── settings/
+    ├── change-theme.fn.ts
+    └── update-preferences.fn.ts
+```
+
+### By Type
+
+Group by function type:
+
+```
+functions-modules/
+├── navigation/
+│   └── open-pages.ts
+├── data/
+│   └── fetch-resources.ts
+└── actions/
+    └── user-actions.ts
+```
+
+## Testing Functions
+
+### Unit Tests
+
+Test functions independently:
+
+```typescript
+import { logout_user } from "./logout.fn";
+
+test("logout_user clears tokens and navigates home", () => {
+  const mockNavigate = jest.fn();
+  const context = { navigate: mockNavigate };
+  
+  localStorage.setItem("auth_token", "test-token");
+  
+  const result = logout_user(context);
+  
+  expect(result.ok).toBe(true);
+  expect(localStorage.getItem("auth_token")).toBeNull();
+  expect(mockNavigate).toHaveBeenCalledWith("/");
+});
+```
+
+### Integration Tests
+
+Test with the voice agent:
+
+```typescript
+import { useWebVoiceAgent } from "@navai/voice-frontend";
+
+test("voice command triggers logout", async () => {
+  const { result } = renderHook(() => useWebVoiceAgent({ ... }));
+  
+  // Simulate voice command
+  await result.current.processCommand("logout");
+  
+  expect(mockNavigate).toHaveBeenCalledWith("/");
+});
+```
+
+## Best Practices
+
+### 1. Return Consistent Shapes
+
+```typescript
+// Good: Consistent result shape
+export function my_function() {
+  if (error) {
+    return { ok: false, error: "Something went wrong" };
+  }
+  return { ok: true, data: result };
+}
+
+// Avoid: Inconsistent returns
+export function bad_function() {
+  if (error) return null;
+  return result;
+}
+```
+
+### 2. Handle Errors Gracefully
+
+```typescript
+export function safe_operation() {
+  try {
+    riskyCode();
+    return { ok: true };
+  } catch (error) {
+    console.error("Operation failed:", error);
+    return { ok: false, error: String(error) };
+  }
+}
+```
+
+### 3. Document with JSDoc
+
+```typescript
+/**
+ * Sends a password reset email to the user.
+ * 
+ * @param context - Navigation context
+ * @param email - User's email address
+ * @returns Result with confirmation message
+ */
+export async function send_password_reset(
+  context: { navigate: (path: string) => void },
+  email: string
+) {
+  // Implementation
+}
+```
+
+### 4. Keep Functions Focused
+
+```typescript
+// Good: Single responsibility
+export function logout_user(context) {
+  clearAuthTokens();
+  context.navigate("/");
+  return { ok: true };
+}
+
+// Avoid: Too many responsibilities
+export function logout_and_show_message_and_track(context) {
+  clearAuthTokens();
+  showToast("Logged out");
+  trackEvent("logout");
+  updateAnalytics();
+  context.navigate("/");
+  return { ok: true };
+}
+```
+
+## Next Steps
+
+- Learn about [route navigation](/guides/route-configuration)
+- Explore [function context](/concepts/function-execution)
+- See [backend API reference](/api-reference/backend)
+
+## Related Documentation
+
+- [Custom Functions Guide](/guides/function-modules)
+- [React App Example](/examples/react-app)
+- [React Native Example](/examples/react-native-app)

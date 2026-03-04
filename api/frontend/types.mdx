@@ -1,0 +1,438 @@
+---
+title: TypeScript Types
+description: Type definitions for the Frontend package
+---
+
+## Overview
+
+Complete TypeScript type definitions for the `@navai/voice-frontend` package.
+
+## Hook Types
+
+### UseWebVoiceAgentOptions
+
+Configuration options for `useWebVoiceAgent` hook.
+
+```typescript
+type UseWebVoiceAgentOptions = {
+  navigate: (path: string) => void;
+  moduleLoaders: NavaiFunctionModuleLoaders;
+  defaultRoutes: NavaiRoute[];
+  env?: Record<string, string | undefined>;
+  apiBaseUrl?: string;
+  routesFile?: string;
+  functionsFolders?: string;
+  modelOverride?: string;
+  defaultRoutesFile?: string;
+  defaultFunctionsFolder?: string;
+};
+```
+
+**Source**: packages/voice-frontend/src/useWebVoiceAgent.ts:14-25
+
+### UseWebVoiceAgentResult
+
+Return value from `useWebVoiceAgent` hook.
+
+```typescript
+type UseWebVoiceAgentResult = {
+  status: VoiceStatus;
+  error: string | null;
+  isConnecting: boolean;
+  isConnected: boolean;
+  start: () => Promise<void>;
+  stop: () => void;
+};
+```
+
+**Source**: packages/voice-frontend/src/useWebVoiceAgent.ts:27-34
+
+### VoiceStatus
+
+```typescript
+type VoiceStatus = "idle" | "connecting" | "connected" | "error";
+```
+
+**Source**: packages/voice-frontend/src/useWebVoiceAgent.ts:10
+
+## Agent Types
+
+### BuildNavaiAgentOptions
+
+Options for building a voice agent.
+
+```typescript
+type BuildNavaiAgentOptions = NavaiFunctionContext & {
+  routes: NavaiRoute[];
+  functionModuleLoaders?: NavaiFunctionModuleLoaders;
+  backendFunctions?: NavaiBackendFunctionDefinition[];
+  executeBackendFunction?: ExecuteNavaiBackendFunction;
+  agentName?: string;
+  baseInstructions?: string;
+};
+```
+
+**Source**: packages/voice-frontend/src/agent.ts:26-33
+
+### BuildNavaiAgentResult
+
+Result from building a voice agent.
+
+```typescript
+type BuildNavaiAgentResult = {
+  agent: RealtimeAgent;
+  warnings: string[];
+};
+```
+
+**Source**: packages/voice-frontend/src/agent.ts:35-38
+
+### NavaiBackendFunctionDefinition
+
+Definition of a backend function.
+
+```typescript
+type NavaiBackendFunctionDefinition = {
+  name: string;
+  description?: string;
+  source?: string;
+};
+```
+
+**Source**: packages/voice-frontend/src/agent.ts:11-15
+
+### ExecuteNavaiBackendFunctionInput
+
+Input for executing a backend function.
+
+```typescript
+type ExecuteNavaiBackendFunctionInput = {
+  functionName: string;
+  payload: Record<string, unknown> | null;
+};
+```
+
+**Source**: packages/voice-frontend/src/agent.ts:17-20
+
+### ExecuteNavaiBackendFunction
+
+Function signature for executing backend functions.
+
+```typescript
+type ExecuteNavaiBackendFunction = (
+  input: ExecuteNavaiBackendFunctionInput
+) => Promise<unknown> | unknown;
+```
+
+**Source**: packages/voice-frontend/src/agent.ts:22-24
+
+## Backend Client Types
+
+### CreateNavaiBackendClientOptions
+
+Options for creating a backend client.
+
+```typescript
+type CreateNavaiBackendClientOptions = {
+  apiBaseUrl?: string;
+  env?: Record<string, string | undefined>;
+  fetchImpl?: typeof fetch;
+  clientSecretPath?: string;
+  functionsListPath?: string;
+  functionsExecutePath?: string;
+};
+```
+
+**Source**: packages/voice-frontend/src/backend.ts:29-36
+
+### NavaiBackendClient
+
+Backend client interface.
+
+```typescript
+type NavaiBackendClient = {
+  createClientSecret: (input?: CreateClientSecretInput) => Promise<CreateClientSecretOutput>;
+  listFunctions: () => Promise<BackendFunctionsResult>;
+  executeFunction: ExecuteNavaiBackendFunction;
+};
+```
+
+**Source**: packages/voice-frontend/src/backend.ts:38-42
+
+### CreateClientSecretInput
+
+```typescript
+type CreateClientSecretInput = {
+  model?: string;
+  voice?: string;
+  instructions?: string;
+  language?: string;
+  voiceAccent?: string;
+  voiceTone?: string;
+  apiKey?: string;
+};
+```
+
+**Source**: packages/voice-frontend/src/backend.ts:9-17
+
+### CreateClientSecretOutput
+
+```typescript
+type CreateClientSecretOutput = {
+  value: string;
+  expires_at?: number;
+};
+```
+
+**Source**: packages/voice-frontend/src/backend.ts:19-22
+
+### BackendFunctionsResult
+
+```typescript
+type BackendFunctionsResult = {
+  functions: NavaiBackendFunctionDefinition[];
+  warnings: string[];
+};
+```
+
+**Source**: packages/voice-frontend/src/backend.ts:24-27
+
+## Function Types
+
+### NavaiFunctionModuleLoaders
+
+Map of module paths to dynamic import functions.
+
+```typescript
+type NavaiFunctionModuleLoaders = Record<string, () => Promise<unknown>>;
+```
+
+**Source**: packages/voice-frontend/src/functions.ts:20
+
+### NavaiFunctionsRegistry
+
+Registry of loaded functions.
+
+```typescript
+type NavaiFunctionsRegistry = {
+  byName: Map<string, NavaiFunctionDefinition>;
+  ordered: NavaiFunctionDefinition[];
+  warnings: string[];
+};
+```
+
+**Source**: packages/voice-frontend/src/functions.ts:14-18
+
+### NavaiFunctionDefinition
+
+Definition of a loaded function.
+
+```typescript
+type NavaiFunctionDefinition = {
+  name: string;
+  description: string;
+  source: string;
+  run: (payload: NavaiFunctionPayload, context: NavaiFunctionContext) => Promise<unknown> | unknown;
+};
+```
+
+**Source**: packages/voice-frontend/src/functions.ts:7-12
+
+### NavaiFunctionPayload
+
+Payload passed to functions.
+
+```typescript
+type NavaiFunctionPayload = Record<string, unknown>;
+```
+
+**Source**: packages/voice-frontend/src/functions.ts:1
+
+### NavaiFunctionContext
+
+Context passed to functions.
+
+```typescript
+type NavaiFunctionContext = {
+  navigate: (path: string) => void;
+};
+```
+
+**Source**: packages/voice-frontend/src/functions.ts:3-5
+
+## Route Types
+
+### NavaiRoute
+
+Route definition for navigation.
+
+```typescript
+type NavaiRoute = {
+  name: string;
+  path: string;
+  description: string;
+  synonyms?: string[];
+};
+```
+
+**Source**: packages/voice-frontend/src/routes.ts:1-6
+
+## Runtime Config Types
+
+### ResolveNavaiFrontendRuntimeConfigOptions
+
+```typescript
+type ResolveNavaiFrontendRuntimeConfigOptions = {
+  moduleLoaders: NavaiFunctionModuleLoaders;
+  defaultRoutes: NavaiRoute[];
+  env?: Record<string, string | undefined>;
+  routesFile?: string;
+  functionsFolders?: string;
+  modelOverride?: string;
+  defaultRoutesFile?: string;
+  defaultFunctionsFolder?: string;
+};
+```
+
+### ResolveNavaiFrontendRuntimeConfigResult
+
+```typescript
+type ResolveNavaiFrontendRuntimeConfigResult = {
+  routes: NavaiRoute[];
+  functionModuleLoaders: NavaiFunctionModuleLoaders;
+  warnings: string[];
+  modelOverride?: string;
+};
+```
+
+## Example Usage
+
+### Typed Hook Usage
+
+```typescript
+import type {
+  UseWebVoiceAgentOptions,
+  UseWebVoiceAgentResult,
+  NavaiRoute,
+  NavaiFunctionModuleLoaders
+} from '@navai/voice-frontend';
+
+const routes: NavaiRoute[] = [
+  { name: 'home', path: '/', description: 'Home page' }
+];
+
+const moduleLoaders: NavaiFunctionModuleLoaders = {
+  './functions/search.ts': () => import('./functions/search')
+};
+
+const options: UseWebVoiceAgentOptions = {
+  navigate: (path) => router.push(path),
+  moduleLoaders,
+  defaultRoutes: routes
+};
+
+const result: UseWebVoiceAgentResult = useWebVoiceAgent(options);
+```
+
+### Typed Agent Building
+
+```typescript
+import type {
+  BuildNavaiAgentOptions,
+  BuildNavaiAgentResult,
+  NavaiBackendFunctionDefinition,
+  ExecuteNavaiBackendFunction
+} from '@navai/voice-frontend';
+
+const backendFunctions: NavaiBackendFunctionDefinition[] = [
+  { name: 'send_email', description: 'Send an email' }
+];
+
+const executeBackendFunction: ExecuteNavaiBackendFunction = async ({ functionName, payload }) => {
+  return await api.execute(functionName, payload);
+};
+
+const options: BuildNavaiAgentOptions = {
+  navigate: (path) => router.push(path),
+  routes,
+  backendFunctions,
+  executeBackendFunction
+};
+
+const result: BuildNavaiAgentResult = await buildNavaiAgent(options);
+```
+
+### Typed Backend Client
+
+```typescript
+import type {
+  CreateNavaiBackendClientOptions,
+  NavaiBackendClient,
+  CreateClientSecretInput,
+  CreateClientSecretOutput
+} from '@navai/voice-frontend';
+
+const options: CreateNavaiBackendClientOptions = {
+  apiBaseUrl: 'https://api.example.com'
+};
+
+const client: NavaiBackendClient = createNavaiBackendClient(options);
+
+const input: CreateClientSecretInput = {
+  model: 'gpt-4o-realtime-preview-2024-12-17'
+};
+
+const output: CreateClientSecretOutput = await client.createClientSecret(input);
+```
+
+### Typed Functions
+
+```typescript
+import type {
+  NavaiFunctionDefinition,
+  NavaiFunctionPayload,
+  NavaiFunctionContext,
+  NavaiFunctionsRegistry
+} from '@navai/voice-frontend';
+
+// Define a function
+const searchFunction: NavaiFunctionDefinition = {
+  name: 'search',
+  description: 'Search for content',
+  source: './functions/search.ts#search',
+  run: async (payload: NavaiFunctionPayload, context: NavaiFunctionContext) => {
+    const query = payload.args?.[0] as string;
+    return { results: [] };
+  }
+};
+
+// Use registry
+const registry: NavaiFunctionsRegistry = await loadNavaiFunctions(moduleLoaders);
+const fn: NavaiFunctionDefinition | undefined = registry.byName.get('search');
+```
+
+## Type Guards
+
+```typescript
+import type { VoiceStatus } from '@navai/voice-frontend';
+
+function isConnected(status: VoiceStatus): status is "connected" {
+  return status === 'connected';
+}
+
+function hasError(status: VoiceStatus): status is "error" {
+  return status === 'error';
+}
+
+function isActive(status: VoiceStatus): boolean {
+  return status === 'connecting' || status === 'connected';
+}
+```
+
+## Related
+
+- [useWebVoiceAgent Hook](/api/frontend/use-web-voice-agent)
+- [buildNavaiAgent](/api/frontend/build-agent)
+- [Backend Client](/api/frontend/backend-client)
+- [Functions](/api/frontend/functions)
+- [Routes](/api/frontend/routes)

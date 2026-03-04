@@ -1,0 +1,185 @@
+---
+title: NAVAI Voice SDK
+description: Build intelligent voice agents with OpenAI Realtime API for web and mobile applications
+---
+
+<div className="relative overflow-hidden">
+  <div className="absolute inset-0 bg-gradient-to-br from-[#1D9A6C]/10 via-[#0A66C2]/10 to-[#FF6B35]/10 dark:from-[#1D9A6C]/20 dark:via-[#0A66C2]/20 dark:to-[#FF6B35]/20" />
+  
+  <div className="relative mt-16 mb-16 max-w-5xl mx-auto px-6">
+    <div className="text-center space-y-6 py-12">
+      <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-[#1D9A6C] via-[#0A66C2] to-[#FF6B35] bg-clip-text text-transparent">
+        NAVAI Voice SDK
+      </h1>
+      <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+        Build intelligent voice agents with OpenAI Realtime API for web and mobile applications
+      </p>
+      
+      <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
+        <a href="/quickstart" className="inline-flex items-center justify-center px-8 py-3 text-base font-medium rounded-lg text-white bg-gradient-to-r from-[#1D9A6C] to-[#0A66C2] hover:opacity-90 transition-opacity">
+          Get Started
+        </a>
+        <a href="/api/backend/overview" className="inline-flex items-center justify-center px-8 py-3 text-base font-medium rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border-2 border-[#1D9A6C] hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+          API Reference
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  ## What is NAVAI?
+
+  NAVAI is a comprehensive SDK for building voice-first applications with OpenAI's Realtime API. It provides:
+
+  - **Secure backend integration** - Mint ephemeral client secrets and execute server-side tools
+  - **Smart frontend agents** - React hooks for web voice navigation and function execution
+  - **Native mobile support** - React Native integration with WebRTC transport
+  - **Dynamic tool loading** - Automatic discovery and validation of backend and frontend functions
+  - **Route-aware navigation** - Natural language navigation through your app's routes
+
+  ## Three Packages, One Ecosystem
+
+  <CardGroup cols={3}>
+    <Card title="Backend" icon="server" color="#1D9A6C" href="/api/backend/overview">
+      Secure OpenAI Realtime client secret generation and server-side function execution for Express applications.
+    </Card>
+    
+    <Card title="Frontend" icon="browser" color="#0A66C2" href="/api/frontend/overview">
+      React hooks and agent builders for web applications with route navigation and dynamic function loading.
+    </Card>
+    
+    <Card title="Mobile" icon="mobile" color="#FF6B35" href="/api/mobile/overview">
+      React Native integration with WebRTC transport for voice agents on iOS and Android.
+    </Card>
+  </CardGroup>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  ## Key Features
+
+  <div className="grid md:grid-cols-2 gap-6 mt-8">
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <h3 className="text-lg font-semibold text-[#1D9A6C] mb-3">Secure by Default</h3>
+      <p className="text-gray-600 dark:text-gray-300">
+        Keep your OpenAI API keys on the server. The backend package mints secure, ephemeral client secrets with configurable TTL (10-7200 seconds).
+      </p>
+    </div>
+
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <h3 className="text-lg font-semibold text-[#0A66C2] mb-3">Dynamic Tool Loading</h3>
+      <p className="text-gray-600 dark:text-gray-300">
+        Automatically discover and validate tools from your codebase. Functions, classes, and objects are converted into callable agent tools.
+      </p>
+    </div>
+
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <h3 className="text-lg font-semibold text-[#FF6B35] mb-3">Route Navigation</h3>
+      <p className="text-gray-600 dark:text-gray-300">
+        Natural language navigation through your application. The agent understands routes and can navigate users based on conversational commands.
+      </p>
+    </div>
+
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <h3 className="text-lg font-semibold text-[#1D9A6C] mb-3">Framework Agnostic</h3>
+      <p className="text-gray-600 dark:text-gray-300">
+        Works with Express, Next.js, Vite, Expo, and more. Bring your own router and integrate seamlessly with existing applications.
+      </p>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  ## Quick Example
+
+  Here's how easy it is to add voice capabilities to your Express backend:
+
+  ```typescript
+  import express from "express";
+  import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+  const app = express();
+  app.use(express.json());
+
+  registerNavaiExpressRoutes(app, {
+    backendOptions: {
+      openaiApiKey: process.env.OPENAI_API_KEY,
+      defaultModel: "gpt-realtime",
+      defaultVoice: "marin"
+    }
+  });
+
+  app.listen(3000);
+  ```
+
+  And integrate it into your React app:
+
+  ```typescript
+  import { useWebVoiceAgent } from "@navai/voice-frontend";
+  import { useNavigate } from "react-router-dom";
+
+  function VoiceButton() {
+    const navigate = useNavigate();
+    const agent = useWebVoiceAgent({
+      navigate,
+      moduleLoaders: NAVAI_WEB_MODULE_LOADERS,
+      defaultRoutes: NAVAI_ROUTE_ITEMS
+    });
+
+    return (
+      <button onClick={() => agent.start()}>
+        {agent.isConnected ? "Stop Voice" : "Start Voice"}
+      </button>
+    );
+  }
+  ```
+
+  <Info>
+    Ready to build your first voice agent? Follow our [Quick Start guide](/quickstart) to get up and running in minutes.
+  </Info>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  ## Framework Compatibility
+
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+    <div className="text-center p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="font-semibold text-gray-900 dark:text-gray-100">Express</div>
+      <div className="text-sm text-gray-600 dark:text-gray-400">Backend</div>
+    </div>
+    <div className="text-center p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="font-semibold text-gray-900 dark:text-gray-100">React</div>
+      <div className="text-sm text-gray-600 dark:text-gray-400">Frontend</div>
+    </div>
+    <div className="text-center p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="font-semibold text-gray-900 dark:text-gray-100">React Native</div>
+      <div className="text-sm text-gray-600 dark:text-gray-400">Mobile</div>
+    </div>
+    <div className="text-center p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div className="font-semibold text-gray-900 dark:text-gray-100">Expo</div>
+      <div className="text-sm text-gray-600 dark:text-gray-400">Mobile</div>
+    </div>
+  </div>
+</div>
+
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  ## Next Steps
+
+  <CardGroup cols={2}>
+    <Card title="Quick Start" icon="rocket" href="/quickstart">
+      Get your first voice agent running in under 5 minutes
+    </Card>
+    
+    <Card title="Backend API" icon="code" href="/api/backend/overview">
+      Learn about client secret generation and function execution
+    </Card>
+    
+    <Card title="Frontend Integration" icon="react" href="/api/frontend/overview">
+      Integrate voice agents into your React applications
+    </Card>
+    
+    <Card title="Mobile Setup" icon="mobile-screen" href="/api/mobile/overview">
+      Add voice capabilities to React Native apps
+    </Card>
+  </CardGroup>
+</div>

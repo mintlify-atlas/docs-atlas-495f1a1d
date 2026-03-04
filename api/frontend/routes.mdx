@@ -1,0 +1,463 @@
+---
+title: Route Helpers
+description: Route resolution and navigation utilities
+---
+
+## Overview
+
+Route helpers provide utilities for resolving route names and paths to actual navigation paths, and generating prompt text for the voice agent.
+
+## Import
+
+```typescript
+import {
+  resolveNavaiRoute,
+  getNavaiRoutePromptLines,
+  type NavaiRoute
+} from '@navai/voice-frontend';
+```
+
+## resolveNavaiRoute
+
+Resolve a route name or path to an actual navigation path.
+
+### Type Signature
+
+```typescript
+function resolveNavaiRoute(
+  input: string,
+  routes?: NavaiRoute[]
+): string | null
+```
+
+### Parameters
+
+<ParamField path="input" type="string" required>
+  Route name, path, or synonym to resolve
+  
+  Examples: `"home"`, `"/profile"`, `"user settings"`
+</ParamField>
+
+<ParamField path="routes" type="NavaiRoute[]">
+  Array of available routes (defaults to empty array)
+</ParamField>
+
+### Return Value
+
+<ResponseField name="result" type="string | null">
+  - Returns the route path if found
+  - Returns `null` if no match found
+</ResponseField>
+
+### Resolution Strategy
+
+The function tries multiple matching strategies in order:
+
+1. **Exact path match**: Direct path comparison
+   ```typescript
+   resolveNavaiRoute('/profile', routes) // → '/profile'
+   ```
+
+2. **Exact name match**: Route name comparison
+   ```typescript
+   resolveNavaiRoute('profile', routes) // → '/profile'
+   ```
+
+3. **Synonym match**: Check route synonyms
+   ```typescript
+   resolveNavaiRoute('settings', routes) // → '/config' (if 'settings' is a synonym)
+   ```
+
+4. **Partial name match**: Check if input contains route name
+   ```typescript
+   resolveNavaiRoute('go to profile', routes) // → '/profile'
+   ```
+
+5. **Partial synonym match**: Check if input contains synonym
+   ```typescript
+   resolveNavaiRoute('open user settings', routes) // → '/config'
+   ```
+
+### Normalization
+
+All comparisons are normalized:
+- Accents removed (`café` → `cafe`)
+- Trimmed whitespace
+- Lowercase
+
+### Examples
+
+```typescript
+const routes: NavaiRoute[] = [
+  {
+    name: 'home',
+    path: '/',
+    description: 'Home page',
+    synonyms: ['main', 'dashboard']
+  },
+  {
+    name: 'profile',
+    path: '/profile',
+    description: 'User profile page',
+    synonyms: ['user', 'account']
+  },
+  {
+    name: 'settings',
+    path: '/config',
+    description: 'Settings page',
+    synonyms: ['preferences', 'options']
+  }
+];
+
+// Exact path
+resolveNavaiRoute('/profile', routes);
+// → '/profile'
+
+// Exact name
+resolveNavaiRoute('home', routes);
+// → '/'
+
+// Synonym
+resolveNavaiRoute('dashboard', routes);
+// → '/'
+
+resolveNavaiRoute('account', routes);
+// → '/profile'
+
+// Partial match
+resolveNavaiRoute('go to settings', routes);
+// → '/config'
+
+resolveNavaiRoute('open preferences', routes);
+// → '/config'
+
+// Accent normalization
+resolveNavaiRoute('configuración', routes); // 'config' in synonyms
+// → '/config'
+
+// No match
+resolveNavaiRoute('unknown', routes);
+// → null
+```
+
+## getNavaiRoutePromptLines
+
+Generate prompt text lines describing available routes for the voice agent.
+
+### Type Signature
+
+```typescript
+function getNavaiRoutePromptLines(
+  routes?: NavaiRoute[]
+): string[]
+```
+
+### Parameters
+
+<ParamField path="routes" type="NavaiRoute[]">
+  Array of routes to format (defaults to empty array)
+</ParamField>
+
+### Return Value
+
+<ResponseField name="lines" type="string[]">
+  Array of formatted route description lines
+</ResponseField>
+
+### Format
+
+```
+- {name} ({path})[, aliases: {synonym1}, {synonym2}]
+```
+
+### Examples
+
+```typescript
+const routes: NavaiRoute[] = [
+  {
+    name: 'home',
+    path: '/',
+    description: 'Home page',
+    synonyms: ['main', 'dashboard']
+  },
+  {
+    name: 'profile',
+    path: '/profile',
+    description: 'User profile'
+  },
+  {
+    name: 'settings',
+    path: '/settings',
+    description: 'Settings',
+    synonyms: ['config', 'preferences', 'options']
+  }
+];
+
+const lines = getNavaiRoutePromptLines(routes);
+console.log(lines.join('\n'));
+```
+
+**Output:**
+```
+- home (/), aliases: main, dashboard
+- profile (/profile)
+- settings (/settings), aliases: config, preferences, options
+```
+
+### Usage in Agent Instructions
+
+```typescript
+import { buildNavaiAgent, getNavaiRoutePromptLines } from '@navai/voice-frontend';
+
+const routes = [
+  { name: 'home', path: '/', description: 'Home page' },
+  { name: 'profile', path: '/profile', description: 'User profile' }
+];
+
+const routeLines = getNavaiRoutePromptLines(routes);
+
+const instructions = [
+  'You are a voice assistant.',
+  'Allowed routes:',
+  ...routeLines
+].join('\n');
+
+console.log(instructions);
+```
+
+**Output:**
+```
+You are a voice assistant.
+Allowed routes:
+- home (/)
+- profile (/profile)
+```
+
+## NavaiRoute Type
+
+```typescript
+type NavaiRoute = {
+  name: string;         // Route identifier (e.g., 'home', 'profile')
+  path: string;         // Navigation path (e.g., '/', '/profile')
+  description: string;  // Human-readable description
+  synonyms?: string[];  // Alternative names (e.g., ['main', 'dashboard'])
+};
+```
+
+### Route Definition Examples
+
+```typescript
+// Simple route
+const homeRoute: NavaiRoute = {
+  name: 'home',
+  path: '/',
+  description: 'Home page'
+};
+
+// Route with synonyms
+const profileRoute: NavaiRoute = {
+  name: 'profile',
+  path: '/profile',
+  description: 'User profile page',
+  synonyms: ['user', 'account', 'me']
+};
+
+// Route with dynamic path
+const productRoute: NavaiRoute = {
+  name: 'products',
+  path: '/products',
+  description: 'Product catalog',
+  synonyms: ['shop', 'store', 'catalog']
+};
+
+// Settings route
+const settingsRoute: NavaiRoute = {
+  name: 'settings',
+  path: '/settings',
+  description: 'Application settings',
+  synonyms: ['config', 'configuration', 'preferences', 'options']
+};
+```
+
+## Complete Example
+
+```typescript
+import {
+  resolveNavaiRoute,
+  getNavaiRoutePromptLines,
+  type NavaiRoute
+} from '@navai/voice-frontend';
+
+// Define routes
+const routes: NavaiRoute[] = [
+  {
+    name: 'home',
+    path: '/',
+    description: 'Home page',
+    synonyms: ['main', 'dashboard', 'inicio']
+  },
+  {
+    name: 'search',
+    path: '/search',
+    description: 'Search page',
+    synonyms: ['find', 'lookup', 'buscar']
+  },
+  {
+    name: 'profile',
+    path: '/profile',
+    description: 'User profile',
+    synonyms: ['user', 'account', 'me', 'perfil']
+  },
+  {
+    name: 'settings',
+    path: '/settings',
+    description: 'Settings',
+    synonyms: ['config', 'preferences', 'configuración']
+  }
+];
+
+// Generate prompt lines for agent
+const promptLines = getNavaiRoutePromptLines(routes);
+console.log('Agent instructions:');
+console.log(promptLines.join('\n'));
+
+// Test resolution
+const testInputs = [
+  'home',
+  'go to profile',
+  'búscar',
+  'configuración',
+  'dashboard',
+  'unknown'
+];
+
+testInputs.forEach(input => {
+  const path = resolveNavaiRoute(input, routes);
+  console.log(`"${input}" → ${path ?? 'null'}`);
+});
+
+// Usage in navigation handler
+function handleVoiceNavigation(userInput: string) {
+  const path = resolveNavaiRoute(userInput, routes);
+  
+  if (path) {
+    console.log(`Navigating to: ${path}`);
+    router.push(path);
+    return true;
+  } else {
+    console.log(`Unknown route: ${userInput}`);
+    return false;
+  }
+}
+
+// Test navigation
+handleVoiceNavigation('go to my profile');
+// Navigating to: /profile
+
+handleVoiceNavigation('open settings');
+// Navigating to: /settings
+
+handleVoiceNavigation('show me the dashboard');
+// Navigating to: /
+
+handleVoiceNavigation('go to admin panel');
+// Unknown route: go to admin panel
+```
+
+## Best Practices
+
+### 1. Comprehensive Synonyms
+
+Provide multiple synonyms for better voice recognition:
+
+```typescript
+{
+  name: 'settings',
+  path: '/settings',
+  description: 'Settings',
+  synonyms: [
+    'config',
+    'configuration',
+    'preferences',
+    'options',
+    'setup'
+  ]
+}
+```
+
+### 2. Multilingual Support
+
+Include synonyms in multiple languages:
+
+```typescript
+{
+  name: 'profile',
+  path: '/profile',
+  description: 'User profile',
+  synonyms: [
+    'user',
+    'account',
+    'me',
+    'perfil',      // Spanish
+    'utilisateur', // French
+    'benutzer'     // German
+  ]
+}
+```
+
+### 3. Common Variations
+
+Include common variations and abbreviations:
+
+```typescript
+{
+  name: 'dashboard',
+  path: '/dashboard',
+  description: 'Dashboard',
+  synonyms: [
+    'home',
+    'main',
+    'overview',
+    'dash',
+    'panel',
+    'control panel'
+  ]
+}
+```
+
+### 4. Error Handling
+
+Always check for null returns:
+
+```typescript
+function navigateByVoice(input: string) {
+  const path = resolveNavaiRoute(input, routes);
+  
+  if (!path) {
+    console.error('Could not resolve route:', input);
+    // Show error to user or ask for clarification
+    return;
+  }
+  
+  router.push(path);
+}
+```
+
+## Types
+
+```typescript
+// packages/voice-frontend/src/routes.ts:1-6
+
+export type NavaiRoute = {
+  name: string;
+  path: string;
+  description: string;
+  synonyms?: string[];
+};
+```
+
+## Related
+
+- [buildNavaiAgent](/api/frontend/build-agent) - Uses routes for navigation
+- [useWebVoiceAgent](/api/frontend/use-web-voice-agent) - Provides routes configuration
+- [Types](/api/frontend/types) - Type definitions

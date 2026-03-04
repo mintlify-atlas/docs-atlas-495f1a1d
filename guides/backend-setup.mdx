@@ -1,0 +1,304 @@
+---
+title: 'Backend Setup'
+description: 'Set up an Express backend with NAVAI routes for voice agent support'
+---
+
+## Overview
+
+This guide walks you through setting up an Express backend that provides the necessary routes for NAVAI voice agents. The backend handles client secret generation, function discovery, and function execution.
+
+## What the Backend Provides
+
+Your NAVAI backend serves three critical functions:
+
+1. **Mints secure ephemeral client secrets** for OpenAI Realtime API
+2. **Discovers and exposes backend tools** from your codebase
+3. **Executes backend functions** requested by the voice agent
+
+<Note>
+The backend automatically registers three routes:
+- `POST /navai/realtime/client-secret` - Generate ephemeral tokens
+- `GET /navai/functions` - List available backend functions
+- `POST /navai/functions/execute` - Execute backend functions
+</Note>
+
+## Prerequisites
+
+<Steps>
+  <Step title="Install dependencies">
+    ```bash
+    npm install @navai/voice-backend express dotenv cors
+    npm install -D @types/express @types/cors
+    ```
+
+    Note that `express` is a peer dependency of `@navai/voice-backend`.
+  </Step>
+
+  <Step title="Set up environment variables">
+    Create a `.env` file in your project root:
+
+    ```bash
+    # Required: OpenAI API key for Realtime API
+    OPENAI_API_KEY=sk-...
+
+    # Required: Port for your backend server
+    PORT=3000
+
+    # Required: Allowed CORS origins (comma-separated)
+    NAVAI_CORS_ORIGIN=http://localhost:5173,http://localhost:8081
+
+    # Optional: Realtime model (defaults to gpt-realtime)
+    OPENAI_REALTIME_MODEL=gpt-realtime
+
+    # Optional: Voice selection (defaults to marin)
+    OPENAI_REALTIME_VOICE=marin
+
+    # Optional: Custom instructions for the agent
+    OPENAI_REALTIME_INSTRUCTIONS=You are a helpful navigation assistant.
+
+    # Optional: Language and voice settings
+    OPENAI_REALTIME_LANGUAGE=Spanish
+    OPENAI_REALTIME_VOICE_ACCENT=neutral Latin American Spanish
+    OPENAI_REALTIME_VOICE_TONE=friendly and professional
+
+    # Optional: Client secret TTL in seconds (10-7200, default 600)
+    OPENAI_REALTIME_CLIENT_SECRET_TTL=600
+
+    # Optional: Function folders to scan (defaults to src/ai/functions-modules)
+    NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+
+    # Optional: Allow frontend API keys (default false in production)
+    NAVAI_ALLOW_FRONTEND_API_KEY=false
+    ```
+
+    <Warning>
+    Never commit your `.env` file. Keep `OPENAI_API_KEY` secret and server-side only.
+    </Warning>
+  </Step>
+</Steps>
+
+## Basic Setup
+
+Here's a minimal Express server with NAVAI routes:
+
+```typescript src/server.ts
+import cors from "cors";
+import "dotenv/config";
+import express, { type Request, type Response, type NextFunction } from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+const port = Number(process.env.PORT ?? "3000");
+
+// Parse JSON request bodies
+app.use(express.json());
+
+// Configure CORS
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const allowedOrigins = (process.env.NAVAI_CORS_ORIGIN ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS blocked for origin: ${origin}`));
+      }
+    }
+  })
+);
+
+// Health check endpoint
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
+// Register NAVAI routes
+registerNavaiExpressRoutes(app);
+
+// Global error handler
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  const message = error instanceof Error ? error.message : "Unexpected error";
+  res.status(500).json({ error: message });
+});
+
+// Start server
+app.listen(port, () => {
+  console.log(`Server listening on http://localhost:${port}`);
+});
+```
+
+<Tip>
+The above example is from `apps/playground-api/src/server.ts:1-64` in the NAVAI source.
+</Tip>
+
+## Advanced Configuration
+
+For more control over the backend behavior, pass options to `registerNavaiExpressRoutes`:
+
+```typescript
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+registerNavaiExpressRoutes(app, {
+  // Backend options for client secret generation
+  backendOptions: {
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    defaultModel: "gpt-realtime",
+    defaultVoice: "marin",
+    clientSecretTtlSeconds: 600,
+    allowApiKeyFromRequest: false, // Security: reject frontend API keys
+    defaultInstructions: "You are a helpful navigation assistant.",
+    defaultLanguage: "Spanish",
+    defaultVoiceAccent: "neutral Latin American Spanish",
+    defaultVoiceTone: "friendly and professional"
+  },
+
+  // Runtime options for function discovery
+  runtimeOptions: {
+    functionsFolders: "src/ai/functions-modules,...",
+    baseDir: process.cwd()
+  },
+
+  // Custom route paths (optional)
+  clientSecretPath: "/navai/realtime/client-secret",
+  functionsListPath: "/navai/functions",
+  functionsExecutePath: "/navai/functions/execute",
+
+  // Disable function routes if you only need client secrets
+  includeFunctionsRoutes: true
+});
+```
+
+## CORS Configuration Patterns
+
+The playground example includes a helper to allow localhost origins automatically:
+
+```typescript
+function isLocalOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      const configuredOrigins = (process.env.NAVAI_CORS_ORIGIN ?? "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      if (
+        configuredOrigins.includes("*") ||
+        configuredOrigins.includes(origin) ||
+        isLocalOrigin(origin)
+      ) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    }
+  })
+);
+```
+
+## Function Discovery
+
+The backend automatically scans configured folders for function modules. See [Function Modules](/guides/function-modules) for details on creating backend functions.
+
+<Note>
+Function registry is lazy-loaded on first request and cached in-memory. Restart the server to pick up file changes.
+</Note>
+
+## API Key Security
+
+<Warning>
+**Production Security Checklist:**
+
+1. Keep `OPENAI_API_KEY` on the server only
+2. Set `NAVAI_ALLOW_FRONTEND_API_KEY=false` in production
+3. Whitelist specific CORS origins (never use `*` in production)
+4. Use environment-specific `.env` files
+5. Monitor and log client secret requests
+</Warning>
+
+By default, if `OPENAI_API_KEY` is set on the backend:
+- Request API keys from the frontend are **rejected**
+- Set `allowApiKeyFromRequest: true` to allow frontend keys (dev only)
+
+If `OPENAI_API_KEY` is missing on the backend:
+- Request API keys from the frontend are **allowed** as fallback
+
+## Client Secret Flow
+
+When a frontend/mobile app starts a voice session:
+
+1. Frontend calls `POST /navai/realtime/client-secret`
+2. Backend validates options and API key policy
+3. Backend calls OpenAI Realtime API to mint an ephemeral token
+4. Backend returns `{ value: "ek_...", expires_at: 1730000000 }`
+5. Frontend uses `value` to connect to OpenAI Realtime WebSocket
+
+<Tip>
+Client secrets are ephemeral and expire after `clientSecretTtlSeconds` (default 600 seconds).
+</Tip>
+
+## Troubleshooting
+
+### "Missing openaiApiKey in NavaiVoiceBackendOptions"
+
+Ensure `OPENAI_API_KEY` is set in your `.env` file and loaded with `dotenv/config`.
+
+### "CORS blocked for origin: ..."
+
+Add the origin to `NAVAI_CORS_ORIGIN` in `.env`:
+
+```bash
+NAVAI_CORS_ORIGIN=http://localhost:5173,http://localhost:8081
+```
+
+### "clientSecretTtlSeconds must be between 10 and 7200"
+
+Set a valid TTL value in `.env`:
+
+```bash
+OPENAI_REALTIME_CLIENT_SECRET_TTL=600
+```
+
+### Functions not loading
+
+Check that `NAVAI_FUNCTIONS_FOLDERS` points to the correct path and restart the server to reload the function registry.
+
+## Next Steps
+
+- [Function Modules](/guides/function-modules) - Create backend functions
+- [Web Integration](/guides/web-integration) - Connect a React web app
+- [Mobile Integration](/guides/mobile-integration) - Connect a React Native app
+- [Environment Variables](/guides/environment-variables) - Complete env reference
+
+## Related API Reference
+
+- [registerNavaiExpressRoutes](/api/backend/register-routes)
+- [NavaiVoiceBackendOptions](/api/backend/types#navaivoicebackendoptions)
+- [createRealtimeClientSecret](/api/backend/client-secret)

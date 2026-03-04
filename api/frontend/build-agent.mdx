@@ -1,0 +1,411 @@
+---
+title: buildNavaiAgent
+description: Build a configured Navai voice agent
+---
+
+## Overview
+
+The `buildNavaiAgent` function creates a fully configured OpenAI Realtime agent with navigation tools, function execution capabilities, and automatic tool registration.
+
+## Import
+
+```typescript
+import { buildNavaiAgent } from '@navai/voice-frontend';
+```
+
+## Type Signature
+
+```typescript
+async function buildNavaiAgent(
+  options: BuildNavaiAgentOptions
+): Promise<BuildNavaiAgentResult>
+```
+
+## Parameters
+
+<ParamField path="options" type="BuildNavaiAgentOptions" required>
+  Agent configuration options
+
+  <ParamField path="navigate" type="(path: string) => void" required>
+    Navigation function for route changes
+  </ParamField>
+
+  <ParamField path="routes" type="NavaiRoute[]" required>
+    Array of available routes for navigation
+    
+    ```typescript
+    routes: [
+      {
+        name: 'home',
+        path: '/',
+        description: 'Home page',
+        synonyms: ['main', 'dashboard']
+      }
+    ]
+    ```
+  </ParamField>
+
+  <ParamField path="functionModuleLoaders" type="NavaiFunctionModuleLoaders">
+    Map of module paths to import functions
+  </ParamField>
+
+  <ParamField path="backendFunctions" type="NavaiBackendFunctionDefinition[]">
+    Array of backend function definitions
+    
+    ```typescript
+    backendFunctions: [
+      {
+        name: 'send_email',
+        description: 'Send an email to a user',
+        source: 'backend'
+      }
+    ]
+    ```
+  </ParamField>
+
+  <ParamField path="executeBackendFunction" type="ExecuteNavaiBackendFunction">
+    Function to execute backend functions
+    
+    ```typescript
+    executeBackendFunction: async ({ functionName, payload }) => {
+      // Execute backend function
+      return result;
+    }
+    ```
+  </ParamField>
+
+  <ParamField path="agentName" type="string">
+    Agent display name (defaults to `"Navai Voice Agent"`)
+  </ParamField>
+
+  <ParamField path="baseInstructions" type="string">
+    Base system instructions (defaults to `"You are a voice assistant embedded in a web app."`)
+  </ParamField>
+</ParamField>
+
+## Return Value
+
+<ResponseField name="agent" type="RealtimeAgent" required>
+  Configured OpenAI Realtime agent instance ready for connection
+</ResponseField>
+
+<ResponseField name="warnings" type="string[]" required>
+  Array of warning messages from:
+  - Function loading errors
+  - Backend function conflicts
+  - Invalid tool names
+  - Duplicate function names
+  - Reserved name conflicts
+</ResponseField>
+
+## Built-in Tools
+
+The agent automatically includes these tools:
+
+### 1. navigate_to
+
+Navigate to an allowed route in the app.
+
+**Parameters:**
+- `target` (string): Route name or path (e.g., `"profile"`, `"/settings"`)
+
+**Returns:**
+```json
+{ "ok": true, "path": "/profile" }
+```
+
+**Error:**
+```json
+{ "ok": false, "error": "Unknown or disallowed route." }
+```
+
+### 2. execute_app_function
+
+Execute an allowed frontend or backend function.
+
+**Parameters:**
+- `function_name` (string): Name of the function to execute
+- `payload` (object | null): Function arguments
+  - `payload.args`: Array of function arguments
+  - `payload.constructorArgs`: Array for class constructor
+  - `payload.methodArgs`: Array for class methods
+
+**Returns:**
+```json
+{
+  "ok": true,
+  "function_name": "search",
+  "source": "frontend",
+  "result": { /* function result */ }
+}
+```
+
+**Error:**
+```json
+{
+  "ok": false,
+  "function_name": "unknown_fn",
+  "error": "Unknown or disallowed function.",
+  "available_functions": ["search", "get_user"]
+}
+```
+
+### 3. Direct Function Tools
+
+Functions with valid names (matching `/^[a-zA-Z0-9_-]{1,64}$/`) get direct tool aliases:
+
+```typescript
+// Instead of:
+execute_app_function("search", { payload: { args: ["query"] } })
+
+// Can use:
+search({ payload: { args: ["query"] } })
+```
+
+## Examples
+
+### Basic Agent
+
+```typescript
+import { buildNavaiAgent } from '@navai/voice-frontend';
+
+const { agent, warnings } = await buildNavaiAgent({
+  navigate: (path) => router.push(path),
+  routes: [
+    { name: 'home', path: '/', description: 'Home page' },
+    { name: 'profile', path: '/profile', description: 'User profile' }
+  ]
+});
+
+// Log any warnings
+warnings.forEach(warning => console.warn(warning));
+
+// Use agent with RealtimeSession
+import { RealtimeSession } from '@openai/agents/realtime';
+const session = new RealtimeSession(agent);
+await session.connect({ apiKey: 'your-api-key' });
+```
+
+### With Frontend Functions
+
+```typescript
+const { agent } = await buildNavaiAgent({
+  navigate,
+  routes,
+  functionModuleLoaders: {
+    './functions/search.ts': () => import('./functions/search'),
+    './functions/profile.ts': () => import('./functions/profile')
+  }
+});
+```
+
+### With Backend Functions
+
+```typescript
+const { agent } = await buildNavaiAgent({
+  navigate,
+  routes,
+  backendFunctions: [
+    {
+      name: 'send_email',
+      description: 'Send an email',
+      source: 'backend'
+    },
+    {
+      name: 'create_order',
+      description: 'Create a new order',
+      source: 'backend'
+    }
+  ],
+  executeBackendFunction: async ({ functionName, payload }) => {
+    const response = await fetch('/api/functions/execute', {
+      method: 'POST',
+      body: JSON.stringify({ functionName, payload })
+    });
+    return response.json();
+  }
+});
+```
+
+### With Custom Instructions
+
+```typescript
+const { agent } = await buildNavaiAgent({
+  navigate,
+  routes,
+  agentName: 'My App Assistant',
+  baseInstructions: `You are a helpful assistant for MyApp. 
+Be friendly and concise. 
+Always confirm before executing sensitive actions.`
+});
+```
+
+### Complete Example
+
+```typescript
+const { agent, warnings } = await buildNavaiAgent({
+  navigate: (path) => router.push(path),
+  routes: [
+    {
+      name: 'home',
+      path: '/',
+      description: 'Home page',
+      synonyms: ['main', 'dashboard']
+    },
+    {
+      name: 'search',
+      path: '/search',
+      description: 'Search page'
+    }
+  ],
+  functionModuleLoaders: {
+    './functions/search.ts': () => import('./functions/search')
+  },
+  backendFunctions: [
+    {
+      name: 'send_notification',
+      description: 'Send a push notification',
+      source: 'backend'
+    }
+  ],
+  executeBackendFunction: async ({ functionName, payload }) => {
+    const response = await backendClient.executeFunction({
+      functionName,
+      payload
+    });
+    return response;
+  },
+  agentName: 'MyApp Voice',
+  baseInstructions: 'You are a voice assistant for MyApp.'
+});
+
+// Handle warnings
+if (warnings.length > 0) {
+  console.warn('Agent warnings:', warnings);
+}
+
+// Connect agent
+const session = new RealtimeSession(agent);
+await session.connect({ apiKey });
+```
+
+## Generated Instructions
+
+The agent receives system instructions in this format:
+
+```
+You are a voice assistant embedded in a web app.
+Allowed routes:
+- home (/) aliases: main, dashboard
+- profile (/profile)
+Allowed app functions:
+- search: Search for content
+- send_notification: Send a push notification
+Rules:
+- If user asks to go/open a section, always call navigate_to.
+- If user asks to run an internal action, call execute_app_function or the matching direct function tool.
+- Always include payload in execute_app_function. Use null when no arguments are needed.
+- For execute_app_function, pass arguments using payload.args (array).
+- For class methods, pass payload.constructorArgs and payload.methodArgs.
+- Never invent routes or function names that are not listed.
+- If destination/action is unclear, ask a brief clarifying question.
+```
+
+## Function Naming Rules
+
+### Reserved Names
+
+These names cannot be used as direct tools:
+- `navigate_to`
+- `execute_app_function`
+
+Functions with these names are still available via `execute_app_function`.
+
+### Valid Tool Names
+
+Direct tools are created for functions matching:
+- Pattern: `/^[a-zA-Z0-9_-]{1,64}$/`
+- Length: 1-64 characters
+- Characters: letters, numbers, underscore, hyphen
+
+### Conflict Resolution
+
+1. **Frontend vs Backend**: Frontend functions take precedence
+2. **Duplicates**: First occurrence wins, later ones are ignored
+3. **Invalid Names**: Available via `execute_app_function` only
+
+## Warnings
+
+The function emits warnings for:
+
+```typescript
+// Backend function conflicts with frontend
+"[navai] Ignored backend function \"search\": name conflicts with a frontend function."
+
+// Duplicate backend functions
+"[navai] Ignored duplicated backend function \"send_email\"."
+
+// Reserved name conflict
+"[navai] Function \"navigate_to\" is available only via execute_app_function because its name conflicts with a built-in tool."
+
+// Invalid tool name
+"[navai] Function \"my function\" is available only via execute_app_function because its name is not a valid tool id."
+
+// Duplicate after normalization
+"[navai] Renamed duplicated function \"search\" to \"search_2\"."
+```
+
+## Error Handling
+
+Function execution errors are caught and returned:
+
+```json
+{
+  "ok": false,
+  "function_name": "search",
+  "error": "Function execution failed.",
+  "details": "Database connection timeout"
+}
+```
+
+## Types
+
+```typescript
+// packages/voice-frontend/src/agent.ts:11-24
+
+export type NavaiBackendFunctionDefinition = {
+  name: string;
+  description?: string;
+  source?: string;
+};
+
+export type ExecuteNavaiBackendFunctionInput = {
+  functionName: string;
+  payload: Record<string, unknown> | null;
+};
+
+export type ExecuteNavaiBackendFunction = (
+  input: ExecuteNavaiBackendFunctionInput
+) => Promise<unknown> | unknown;
+
+export type BuildNavaiAgentOptions = NavaiFunctionContext & {
+  routes: NavaiRoute[];
+  functionModuleLoaders?: NavaiFunctionModuleLoaders;
+  backendFunctions?: NavaiBackendFunctionDefinition[];
+  executeBackendFunction?: ExecuteNavaiBackendFunction;
+  agentName?: string;
+  baseInstructions?: string;
+};
+
+export type BuildNavaiAgentResult = {
+  agent: RealtimeAgent;
+  warnings: string[];
+};
+```
+
+## Related
+
+- [useWebVoiceAgent](/api/frontend/use-web-voice-agent) - React hook using this function
+- [loadNavaiFunctions](/api/frontend/functions) - Function loading
+- [Routes](/api/frontend/routes) - Route resolution
+- [Types](/api/frontend/types) - Type definitions

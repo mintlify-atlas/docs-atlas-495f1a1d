@@ -1,0 +1,473 @@
+---
+title: "TypeScript Types"
+description: "Complete type reference for Backend package"
+---
+
+## Backend Options
+
+### NavaiVoiceBackendOptions
+
+Configuration options for backend initialization.
+
+**Source:** `packages/voice-backend/src/index.ts:30`
+
+```typescript
+type NavaiVoiceBackendOptions = {
+  openaiApiKey?: string;
+  defaultModel?: string;
+  defaultVoice?: string;
+  defaultInstructions?: string;
+  defaultLanguage?: string;
+  defaultVoiceAccent?: string;
+  defaultVoiceTone?: string;
+  clientSecretTtlSeconds?: number;
+  allowApiKeyFromRequest?: boolean;
+}
+```
+
+<ParamField path="openaiApiKey" type="string">
+  Your OpenAI API key. If not provided, `allowApiKeyFromRequest` must be enabled
+</ParamField>
+
+<ParamField path="defaultModel" type="string" default="gpt-realtime">
+  Default OpenAI Realtime model
+</ParamField>
+
+<ParamField path="defaultVoice" type="string" default="marin">
+  Default voice for audio output
+</ParamField>
+
+<ParamField path="defaultInstructions" type="string" default="You are a helpful assistant.">
+  Default system instructions
+</ParamField>
+
+<ParamField path="defaultLanguage" type="string">
+  Default response language (e.g., "Spanish", "French")
+</ParamField>
+
+<ParamField path="defaultVoiceAccent" type="string">
+  Default voice accent (e.g., "neutral Latin American Spanish")
+</ParamField>
+
+<ParamField path="defaultVoiceTone" type="string">
+  Default voice tone (e.g., "friendly and professional")
+</ParamField>
+
+<ParamField path="clientSecretTtlSeconds" type="number" default="600">
+  Time-to-live for client secrets in seconds. Must be between 10 and 7200
+</ParamField>
+
+<ParamField path="allowApiKeyFromRequest" type="boolean">
+  Whether to allow API keys from client requests. Auto-enabled if `openaiApiKey` is not set
+</ParamField>
+
+---
+
+### CreateClientSecretRequest
+
+Request body for creating a client secret.
+
+**Source:** `packages/voice-backend/src/index.ts:42`
+
+```typescript
+type CreateClientSecretRequest = {
+  model?: string;
+  voice?: string;
+  instructions?: string;
+  language?: string;
+  voiceAccent?: string;
+  voiceTone?: string;
+  apiKey?: string;
+}
+```
+
+<ParamField path="model" type="string">
+  Override default model for this session
+</ParamField>
+
+<ParamField path="voice" type="string">
+  Override default voice for this session
+</ParamField>
+
+<ParamField path="instructions" type="string">
+  Override default instructions for this session
+</ParamField>
+
+<ParamField path="language" type="string">
+  Override default language for this session
+</ParamField>
+
+<ParamField path="voiceAccent" type="string">
+  Override default voice accent for this session
+</ParamField>
+
+<ParamField path="voiceTone" type="string">
+  Override default voice tone for this session
+</ParamField>
+
+<ParamField path="apiKey" type="string">
+  Client-provided API key (only used if allowed)
+</ParamField>
+
+---
+
+### OpenAIRealtimeClientSecretResponse
+
+Response from OpenAI Realtime client secret endpoint.
+
+**Source:** `packages/voice-backend/src/index.ts:52`
+
+```typescript
+type OpenAIRealtimeClientSecretResponse = {
+  value: string;
+  expires_at: number;
+  session?: unknown;
+}
+```
+
+<ResponseField name="value" type="string" required>
+  The ephemeral client secret token (starts with `ek_`)
+</ResponseField>
+
+<ResponseField name="expires_at" type="number" required>
+  Unix timestamp when the token expires
+</ResponseField>
+
+<ResponseField name="session" type="unknown">
+  Optional session metadata from OpenAI
+</ResponseField>
+
+---
+
+### RegisterNavaiExpressRoutesOptions
+
+Options for registering Express routes.
+
+**Source:** `packages/voice-backend/src/index.ts:58`
+
+```typescript
+type RegisterNavaiExpressRoutesOptions = {
+  env?: Record<string, string | undefined>;
+  backendOptions?: NavaiVoiceBackendOptions;
+  includeFunctionsRoutes?: boolean;
+  clientSecretPath?: string;
+  functionsListPath?: string;
+  functionsExecutePath?: string;
+  functionsBaseDir?: string;
+  functionsFolders?: string;
+  includeExtensions?: string[];
+  exclude?: string[];
+}
+```
+
+<ParamField path="env" type="Record<string, string | undefined>" default="process.env">
+  Environment variables object
+</ParamField>
+
+<ParamField path="backendOptions" type="NavaiVoiceBackendOptions">
+  Backend configuration. Defaults to loading from environment
+</ParamField>
+
+<ParamField path="includeFunctionsRoutes" type="boolean" default="true">
+  Whether to register function routes
+</ParamField>
+
+<ParamField path="clientSecretPath" type="string" default="/navai/realtime/client-secret">
+  Custom path for client secret endpoint
+</ParamField>
+
+<ParamField path="functionsListPath" type="string" default="/navai/functions">
+  Custom path for functions list endpoint
+</ParamField>
+
+<ParamField path="functionsExecutePath" type="string" default="/navai/functions/execute">
+  Custom path for function execution endpoint
+</ParamField>
+
+<ParamField path="functionsBaseDir" type="string">
+  Base directory for function scanning
+</ParamField>
+
+<ParamField path="functionsFolders" type="string">
+  Comma-separated patterns for function discovery
+</ParamField>
+
+<ParamField path="includeExtensions" type="string[]" default='["ts", "js", "mjs", "cjs", "mts", "cts"]'>
+  File extensions to include
+</ParamField>
+
+<ParamField path="exclude" type="string[]" default='["**/node_modules/**", "**/dist/**", "**/.*/**"]'>
+  Glob patterns to exclude
+</ParamField>
+
+---
+
+## Runtime Configuration
+
+### ResolveNavaiBackendRuntimeConfigOptions
+
+Options for resolving runtime configuration.
+
+**Source:** `packages/voice-backend/src/runtime.ts:9`
+
+```typescript
+type ResolveNavaiBackendRuntimeConfigOptions = {
+  env?: Record<string, string | undefined>;
+  functionsFolders?: string;
+  defaultFunctionsFolder?: string;
+  baseDir?: string;
+  includeExtensions?: string[];
+  exclude?: string[];
+}
+```
+
+<ParamField path="env" type="Record<string, string | undefined>" default="process.env">
+  Environment variables object
+</ParamField>
+
+<ParamField path="functionsFolders" type="string">
+  Comma-separated patterns for function discovery
+</ParamField>
+
+<ParamField path="defaultFunctionsFolder" type="string" default="src/ai/functions-modules">
+  Fallback folder when no matches found
+</ParamField>
+
+<ParamField path="baseDir" type="string" default="process.cwd()">
+  Base directory for scanning
+</ParamField>
+
+<ParamField path="includeExtensions" type="string[]" default='["ts", "js", "mjs", "cjs", "mts", "cts"]'>
+  File extensions to include
+</ParamField>
+
+<ParamField path="exclude" type="string[]" default='["**/node_modules/**", "**/dist/**", "**/.*/**"]'>
+  Glob patterns to exclude
+</ParamField>
+
+---
+
+### ResolveNavaiBackendRuntimeConfigResult
+
+Result from runtime configuration resolution.
+
+**Source:** `packages/voice-backend/src/runtime.ts:18`
+
+```typescript
+type ResolveNavaiBackendRuntimeConfigResult = {
+  functionModuleLoaders: NavaiFunctionModuleLoaders;
+  warnings: string[];
+}
+```
+
+<ResponseField name="functionModuleLoaders" type="NavaiFunctionModuleLoaders" required>
+  Record of file paths to module loader functions
+</ResponseField>
+
+<ResponseField name="warnings" type="string[]" required>
+  Array of warning messages from scanning
+</ResponseField>
+
+---
+
+## Function Types
+
+### NavaiFunctionPayload
+
+Payload passed to function execution.
+
+**Source:** `packages/voice-backend/src/functions.ts:1`
+
+```typescript
+type NavaiFunctionPayload = Record<string, unknown>
+```
+
+Common properties:
+- `args` or `arguments`: Array of function arguments
+- `value`: Single value argument
+- `constructorArgs`: Constructor arguments for class instantiation
+- `methodArgs`: Method arguments for class methods
+- Any other properties: Passed as first argument if `args` not provided
+
+---
+
+### NavaiFunctionContext
+
+Context passed to function execution.
+
+**Source:** `packages/voice-backend/src/functions.ts:3`
+
+```typescript
+type NavaiFunctionContext = Record<string, unknown>
+```
+
+Properties:
+- `req`: Express Request object when called from `/navai/functions/execute`
+
+---
+
+### NavaiFunctionDefinition
+
+Normalized function definition.
+
+**Source:** `packages/voice-backend/src/functions.ts:5`
+
+```typescript
+type NavaiFunctionDefinition = {
+  name: string;
+  description: string;
+  source: string;
+  run: (payload: NavaiFunctionPayload, context: NavaiFunctionContext) => Promise<unknown> | unknown;
+}
+```
+
+<ResponseField name="name" type="string" required>
+  Normalized function name (snake_case)
+</ResponseField>
+
+<ResponseField name="description" type="string" required>
+  Human-readable description of what the function does
+</ResponseField>
+
+<ResponseField name="source" type="string" required>
+  Source location in format `path#exportName` or `path#exportName.method`
+</ResponseField>
+
+<ResponseField name="run" type="(payload: NavaiFunctionPayload, context: NavaiFunctionContext) => Promise<unknown> | unknown" required>
+  Async function that executes the tool with given payload and context
+</ResponseField>
+
+---
+
+### NavaiFunctionsRegistry
+
+Registry of loaded functions.
+
+**Source:** `packages/voice-backend/src/functions.ts:12`
+
+```typescript
+type NavaiFunctionsRegistry = {
+  byName: Map<string, NavaiFunctionDefinition>;
+  ordered: NavaiFunctionDefinition[];
+  warnings: string[];
+}
+```
+
+<ResponseField name="byName" type="Map<string, NavaiFunctionDefinition>" required>
+  Map of function names to definitions for O(1) lookup
+</ResponseField>
+
+<ResponseField name="ordered" type="NavaiFunctionDefinition[]" required>
+  Array of all function definitions in discovery order
+</ResponseField>
+
+<ResponseField name="warnings" type="string[]" required>
+  Array of warning messages from loading process
+</ResponseField>
+
+---
+
+### NavaiFunctionModuleLoaders
+
+Record of module loaders.
+
+**Source:** `packages/voice-backend/src/functions.ts:18`
+
+```typescript
+type NavaiFunctionModuleLoaders = Record<string, () => Promise<unknown>>
+```
+
+Maps file paths to async functions that import the module.
+
+**Example:**
+```typescript
+const loaders: NavaiFunctionModuleLoaders = {
+  "src/ai/functions-modules/weather.ts": () => import("./weather.ts"),
+  "src/ai/functions-modules/calendar.ts": () => import("./calendar.ts")
+};
+```
+
+---
+
+## Usage Examples
+
+### Type-Safe Backend Configuration
+
+```typescript
+import type { NavaiVoiceBackendOptions } from "@navai/voice-backend";
+
+const options: NavaiVoiceBackendOptions = {
+  openaiApiKey: process.env.OPENAI_API_KEY,
+  defaultModel: "gpt-realtime",
+  defaultVoice: "marin",
+  defaultInstructions: "You are a helpful assistant.",
+  clientSecretTtlSeconds: 600,
+  allowApiKeyFromRequest: false
+};
+```
+
+### Type-Safe Client Secret Request
+
+```typescript
+import type { CreateClientSecretRequest } from "@navai/voice-backend";
+
+const request: CreateClientSecretRequest = {
+  model: "gpt-realtime",
+  voice: "marin",
+  instructions: "You are a travel assistant.",
+  language: "Spanish",
+  voiceAccent: "neutral Latin American Spanish",
+  voiceTone: "warm and enthusiastic"
+};
+```
+
+### Type-Safe Function Definition
+
+```typescript
+import type { 
+  NavaiFunctionDefinition,
+  NavaiFunctionPayload,
+  NavaiFunctionContext 
+} from "@navai/voice-backend";
+
+const weatherFunction: NavaiFunctionDefinition = {
+  name: "get_weather",
+  description: "Get current weather for a location",
+  source: "src/ai/functions-modules/weather.ts#default",
+  run: async (payload: NavaiFunctionPayload, context: NavaiFunctionContext) => {
+    const location = payload.args?.[0] as string;
+    return { temp: 72, location };
+  }
+};
+```
+
+### Type-Safe Registry Usage
+
+```typescript
+import type { NavaiFunctionsRegistry } from "@navai/voice-backend";
+import { loadNavaiFunctions } from "@navai/voice-backend";
+
+const registry: NavaiFunctionsRegistry = await loadNavaiFunctions(loaders);
+
+// Type-safe lookup
+const fn = registry.byName.get("get_weather");
+if (fn) {
+  const result = await fn.run(
+    { args: ["San Francisco"] },
+    { req: {} as any }
+  );
+}
+
+// Type-safe iteration
+for (const definition of registry.ordered) {
+  console.log(`${definition.name}: ${definition.description}`);
+}
+```
+
+---
+
+## Related APIs
+
+- [registerNavaiExpressRoutes](/api/backend/register-routes) - Uses these types
+- [createRealtimeClientSecret](/api/backend/client-secret) - Uses client secret types
+- [loadNavaiFunctions](/api/backend/functions) - Uses function types

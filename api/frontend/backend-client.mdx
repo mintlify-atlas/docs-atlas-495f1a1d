@@ -1,0 +1,431 @@
+---
+title: createNavaiBackendClient
+description: HTTP client for Navai backend API
+---
+
+## Overview
+
+The `createNavaiBackendClient` function creates an HTTP client for communicating with the Navai backend API. It handles authentication, function listing, and function execution.
+
+## Import
+
+```typescript
+import { createNavaiBackendClient } from '@navai/voice-frontend';
+```
+
+## Type Signature
+
+```typescript
+function createNavaiBackendClient(
+  options?: CreateNavaiBackendClientOptions
+): NavaiBackendClient
+```
+
+## Parameters
+
+<ParamField path="options" type="CreateNavaiBackendClientOptions">
+  Optional client configuration
+
+  <ParamField path="apiBaseUrl" type="string">
+    Backend API base URL
+    
+    **Default**: `http://localhost:3000`
+    
+    Can also be set via `env.NAVAI_API_URL`
+  </ParamField>
+
+  <ParamField path="env" type="Record<string, string | undefined>">
+    Environment variables
+    
+    ```typescript
+    env: {
+      NAVAI_API_URL: 'https://api.example.com'
+    }
+    ```
+  </ParamField>
+
+  <ParamField path="fetchImpl" type="typeof fetch">
+    Custom fetch implementation (defaults to global `fetch`)
+  </ParamField>
+
+  <ParamField path="clientSecretPath" type="string">
+    Path for client secret endpoint
+    
+    **Default**: `/navai/realtime/client-secret`
+  </ParamField>
+
+  <ParamField path="functionsListPath" type="string">
+    Path for functions list endpoint
+    
+    **Default**: `/navai/functions`
+  </ParamField>
+
+  <ParamField path="functionsExecutePath" type="string">
+    Path for function execution endpoint
+    
+    **Default**: `/navai/functions/execute`
+  </ParamField>
+</ParamField>
+
+## Return Value
+
+<ResponseField name="NavaiBackendClient" type="object" required>
+  Backend client instance with three methods
+
+  <ResponseField name="createClientSecret" type="(input?: CreateClientSecretInput) => Promise<CreateClientSecretOutput>" required>
+    Create ephemeral client secret for OpenAI Realtime API
+    
+    **Input:**
+    ```typescript
+    {
+      model?: string;          // e.g., 'gpt-4o-realtime-preview-2024-12-17'
+      voice?: string;          // e.g., 'alloy'
+      instructions?: string;   // System instructions
+      language?: string;       // e.g., 'en'
+      voiceAccent?: string;
+      voiceTone?: string;
+      apiKey?: string;         // Optional override
+    }
+    ```
+    
+    **Output:**
+    ```typescript
+    {
+      value: string;           // Ephemeral API key
+      expires_at?: number;     // Unix timestamp
+    }
+    ```
+  </ResponseField>
+
+  <ResponseField name="listFunctions" type="() => Promise<BackendFunctionsResult>" required>
+    List available backend functions
+    
+    **Output:**
+    ```typescript
+    {
+      functions: [
+        {
+          name: string;
+          description?: string;
+          source?: string;
+        }
+      ],
+      warnings: string[];      // Non-fatal errors
+    }
+    ```
+  </ResponseField>
+
+  <ResponseField name="executeFunction" type="ExecuteNavaiBackendFunction" required>
+    Execute a backend function
+    
+    **Input:**
+    ```typescript
+    {
+      functionName: string;
+      payload: Record<string, unknown> | null;
+    }
+    ```
+    
+    **Output:**
+    ```typescript
+    unknown  // Function result
+    ```
+    
+    **Throws:** Error if function fails or returns `ok: false`
+  </ResponseField>
+</ResponseField>
+
+## Examples
+
+### Basic Usage
+
+```typescript
+import { createNavaiBackendClient } from '@navai/voice-frontend';
+
+const client = createNavaiBackendClient();
+
+// Create client secret
+const secret = await client.createClientSecret();
+console.log(secret.value); // "sk-..."
+
+// List functions
+const { functions } = await client.listFunctions();
+console.log(functions); // [{ name: 'send_email', description: '...' }]
+
+// Execute function
+const result = await client.executeFunction({
+  functionName: 'send_email',
+  payload: {
+    to: 'user@example.com',
+    subject: 'Hello',
+    body: 'World'
+  }
+});
+```
+
+### With Custom Base URL
+
+```typescript
+const client = createNavaiBackendClient({
+  apiBaseUrl: 'https://api.example.com'
+});
+
+// All requests go to https://api.example.com
+const secret = await client.createClientSecret();
+```
+
+### With Environment Variables
+
+```typescript
+const client = createNavaiBackendClient({
+  env: {
+    NAVAI_API_URL: 'https://api.example.com'
+  }
+});
+
+// Uses env.NAVAI_API_URL as base URL
+```
+
+### With Custom Fetch
+
+```typescript
+import fetch from 'node-fetch';
+
+const client = createNavaiBackendClient({
+  fetchImpl: fetch as any
+});
+
+// Uses node-fetch instead of global fetch
+```
+
+### With Custom Paths
+
+```typescript
+const client = createNavaiBackendClient({
+  apiBaseUrl: 'https://api.example.com',
+  clientSecretPath: '/api/v1/realtime/secret',
+  functionsListPath: '/api/v1/functions',
+  functionsExecutePath: '/api/v1/functions/run'
+});
+```
+
+### With Model Override
+
+```typescript
+const secret = await client.createClientSecret({
+  model: 'gpt-4o-realtime-preview-2024-12-17',
+  voice: 'alloy',
+  instructions: 'You are a helpful assistant.'
+});
+
+console.log(secret);
+// { value: 'sk-...', expires_at: 1234567890 }
+```
+
+### Handling Function List Errors
+
+```typescript
+const { functions, warnings } = await client.listFunctions();
+
+if (warnings.length > 0) {
+  console.warn('Function loading warnings:', warnings);
+  // [navai] Failed to load backend functions (404).
+}
+
+console.log(`Loaded ${functions.length} backend functions`);
+```
+
+### Executing Backend Functions
+
+```typescript
+try {
+  const result = await client.executeFunction({
+    functionName: 'create_order',
+    payload: {
+      items: [{ id: 1, quantity: 2 }],
+      userId: '123'
+    }
+  });
+  
+  console.log('Order created:', result);
+} catch (error) {
+  console.error('Function execution failed:', error.message);
+}
+```
+
+### Complete Integration Example
+
+```typescript
+import { createNavaiBackendClient } from '@navai/voice-frontend';
+import { buildNavaiAgent } from '@navai/voice-frontend';
+import { RealtimeSession } from '@openai/agents/realtime';
+
+// Create client
+const client = createNavaiBackendClient({
+  apiBaseUrl: process.env.NEXT_PUBLIC_API_URL
+});
+
+// Get ephemeral key and functions
+const secret = await client.createClientSecret({
+  model: 'gpt-4o-realtime-preview-2024-12-17'
+});
+const { functions: backendFunctions } = await client.listFunctions();
+
+// Build agent
+const { agent } = await buildNavaiAgent({
+  navigate: (path) => router.push(path),
+  routes: myRoutes,
+  backendFunctions,
+  executeBackendFunction: client.executeFunction
+});
+
+// Start session
+const session = new RealtimeSession(agent);
+await session.connect({
+  apiKey: secret.value,
+  model: 'gpt-4o-realtime-preview-2024-12-17'
+});
+```
+
+## API Endpoints
+
+### POST /navai/realtime/client-secret
+
+Create ephemeral client secret.
+
+**Request:**
+```json
+{
+  "model": "gpt-4o-realtime-preview-2024-12-17",
+  "voice": "alloy",
+  "instructions": "You are helpful."
+}
+```
+
+**Response:**
+```json
+{
+  "value": "sk-...",
+  "expires_at": 1234567890
+}
+```
+
+### GET /navai/functions
+
+List available backend functions.
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "name": "send_email",
+      "description": "Send an email",
+      "source": "backend"
+    }
+  ],
+  "warnings": []
+}
+```
+
+### POST /navai/functions/execute
+
+Execute a backend function.
+
+**Request:**
+```json
+{
+  "function_name": "send_email",
+  "payload": {
+    "to": "user@example.com",
+    "subject": "Hello"
+  }
+}
+```
+
+**Response (Success):**
+```json
+{
+  "ok": true,
+  "result": { "messageId": "abc123" }
+}
+```
+
+**Response (Error):**
+```json
+{
+  "ok": false,
+  "error": "Invalid email address",
+  "details": "user@example is not a valid email"
+}
+```
+
+## Error Handling
+
+### Client Secret Errors
+
+```typescript
+try {
+  const secret = await client.createClientSecret();
+} catch (error) {
+  // HTTP error or invalid response
+  console.error('Failed to create secret:', error.message);
+}
+```
+
+### Function List Errors
+
+```typescript
+const { functions, warnings } = await client.listFunctions();
+
+// Always succeeds, but may return warnings
+if (warnings.length > 0) {
+  warnings.forEach(w => console.warn(w));
+}
+
+if (functions.length === 0) {
+  console.log('No backend functions available');
+}
+```
+
+### Function Execution Errors
+
+```typescript
+try {
+  const result = await client.executeFunction({
+    functionName: 'send_email',
+    payload: { to: 'invalid' }
+  });
+} catch (error) {
+  // Either HTTP error or function returned ok: false
+  console.error('Function failed:', error.message);
+}
+```
+
+## Types
+
+```typescript
+// packages/voice-frontend/src/backend.ts:29-42
+
+export type CreateNavaiBackendClientOptions = {
+  apiBaseUrl?: string;
+  env?: Record<string, string | undefined>;
+  fetchImpl?: typeof fetch;
+  clientSecretPath?: string;
+  functionsListPath?: string;
+  functionsExecutePath?: string;
+};
+
+export type NavaiBackendClient = {
+  createClientSecret: (input?: CreateClientSecretInput) => Promise<CreateClientSecretOutput>;
+  listFunctions: () => Promise<BackendFunctionsResult>;
+  executeFunction: ExecuteNavaiBackendFunction;
+};
+```
+
+## Related
+
+- [useWebVoiceAgent](/api/frontend/use-web-voice-agent) - Uses this client
+- [buildNavaiAgent](/api/frontend/build-agent) - Consumes backend functions
+- [Backend Package](/api/backend/overview) - Server-side implementation
+- [Types](/api/frontend/types) - Type definitions

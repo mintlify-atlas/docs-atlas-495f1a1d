@@ -1,0 +1,472 @@
+---
+title: 'Route Configuration'
+description: 'Configure routes for voice-controlled navigation'
+---
+
+## Overview
+
+Routes are the navigable destinations in your app that the voice agent can understand and navigate to. They map natural language to app paths.
+
+## Route Structure
+
+A route is defined by the `NavaiRoute` type:
+
+```typescript
+type NavaiRoute = {
+  name: string;        // Canonical name the agent uses
+  path: string;        // App route path (e.g., "/profile")
+  description: string; // What this route is for
+  synonyms: string[];  // Alternative names the agent understands
+};
+```
+
+## Basic Configuration
+
+### Web Apps
+
+Create `src/ai/routes.ts`:
+
+```typescript src/ai/routes.ts
+import type { NavaiRoute } from "@navai/voice-frontend";
+
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "inicio",
+    path: "/",
+    description: "Landing page with instructions and status",
+    synonyms: ["home", "principal", "start"]
+  },
+  {
+    name: "perfil",
+    path: "/profile",
+    description: "User profile area",
+    synonyms: ["profile", "mi perfil", "account"]
+  },
+  {
+    name: "ajustes",
+    path: "/settings",
+    description: "Preferences and app settings",
+    synonyms: ["settings", "configuracion", "configuration", "config"]
+  },
+  {
+    name: "ayuda",
+    path: "/help",
+    description: "Help and troubleshooting page",
+    synonyms: ["help", "soporte", "support"]
+  }
+];
+```
+
+<Tip>
+This example is from `apps/playground-web/src/ai/routes.ts:1-29` in the NAVAI source.
+</Tip>
+
+### Mobile Apps
+
+Create `src/ai/routes.ts`:
+
+```typescript src/ai/routes.ts
+import type { NavaiRoute } from "@navai/voice-mobile";
+
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "inicio",
+    path: "/",
+    description: "Pantalla principal del playground mobile",
+    synonyms: ["home", "principal", "start"]
+  },
+  {
+    name: "perfil",
+    path: "/profile",
+    description: "Pantalla de perfil",
+    synonyms: ["profile", "mi perfil", "account"]
+  },
+  {
+    name: "ajustes",
+    path: "/settings",
+    description: "Pantalla de configuracion",
+    synonyms: ["settings", "configuracion", "preferencias", "config"]
+  },
+  {
+    name: "actividad",
+    path: "/activity",
+    description: "Pantalla de actividad reciente",
+    synonyms: ["activity", "historial", "reciente", "activity feed"]
+  },
+  {
+    name: "facturacion",
+    path: "/billing",
+    description: "Pantalla de facturacion y pagos",
+    synonyms: ["billing", "pagos", "suscripcion", "cobros"]
+  },
+  {
+    name: "ayuda",
+    path: "/help",
+    description: "Pantalla de ayuda y soporte",
+    synonyms: ["help", "soporte", "support"]
+  }
+];
+```
+
+## Field Guide
+
+### `name`
+
+**Required.** The canonical name the agent uses internally.
+
+**Best practices:**
+- Use lowercase
+- Use the primary language of your app
+- Keep it concise (1-2 words)
+- Make it unique across all routes
+
+**Examples:**
+- `"inicio"`, `"perfil"`, `"ajustes"`
+- `"home"`, `"profile"`, `"settings"`
+
+### `path`
+
+**Required.** The route path in your app.
+
+**Format:**
+- Must start with `/`
+- Use standard URL path conventions
+- Match your router configuration
+
+**Examples:**
+- `"/"` - Home
+- `"/profile"` - Profile
+- `"/settings/account"` - Nested route
+- `"/user/:id"` - Dynamic route (if supported by your router)
+
+<Note>
+Dynamic paths like `/user/:id` require additional handling in your navigate function.
+</Note>
+
+### `description`
+
+**Required.** A clear explanation of what this route is for.
+
+**Best practices:**
+- Be specific and descriptive
+- Use natural language
+- Mention key features or content
+
+**Examples:**
+- `"Landing page with instructions and status"`
+- `"User profile area"`
+- `"Preferences and app settings"`
+
+### `synonyms`
+
+**Required.** Alternative names the agent can match.
+
+**Best practices:**
+- Include translations (if multilingual)
+- Include common variations
+- Include abbreviations
+- Include related terms
+
+**Examples:**
+```typescript
+// Multilingual
+synonyms: ["home", "inicio", "principal", "start"]
+
+// Variations
+synonyms: ["settings", "configuracion", "configuration", "config", "preferences"]
+
+// Related terms
+synonyms: ["help", "ayuda", "soporte", "support", "faq"]
+```
+
+## Route Resolution
+
+The `navigate_to` tool uses `resolveNavaiRoute` to match natural language to paths:
+
+```typescript
+import { resolveNavaiRoute } from "@navai/voice-frontend";
+
+const routes = NAVAI_ROUTE_ITEMS;
+const userInput = "llevame a configuracion";
+const path = resolveNavaiRoute(userInput, routes);
+// Returns: "/settings"
+```
+
+**Matching logic:**
+
+1. **Exact match on `name`**: User says "ajustes" → matches route with `name: "ajustes"`
+2. **Exact match on `synonyms`**: User says "settings" → matches route with `synonyms: ["settings"]`
+3. **Partial match**: User says "configuracion" → matches route with `synonyms: ["configuracion"]`
+4. **Fuzzy match**: Agent uses natural language understanding to find best match
+
+<Warning>
+If multiple routes match equally well, the first one in the array wins. Order routes by priority.
+</Warning>
+
+## Advanced Patterns
+
+### Nested Routes
+
+```typescript
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "settings",
+    path: "/settings",
+    description: "Settings hub",
+    synonyms: ["ajustes", "config"]
+  },
+  {
+    name: "settings account",
+    path: "/settings/account",
+    description: "Account settings",
+    synonyms: ["ajustes de cuenta", "account config"]
+  },
+  {
+    name: "settings privacy",
+    path: "/settings/privacy",
+    description: "Privacy settings",
+    synonyms: ["privacidad", "privacy config"]
+  }
+];
+```
+
+**Usage:**
+- "llevame a ajustes" → `/settings`
+- "abre ajustes de cuenta" → `/settings/account`
+- "configuracion de privacidad" → `/settings/privacy`
+
+### Dynamic Routes
+
+For routes with parameters, you may need custom handling:
+
+```typescript
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "user profile",
+    path: "/user/:id",
+    description: "View a user profile",
+    synonyms: ["perfil de usuario", "ver usuario"]
+  }
+];
+```
+
+Custom navigate function:
+
+```typescript
+const navigate = (input: string) => {
+  // Handle dynamic routes
+  if (input.startsWith("/user/")) {
+    router.navigate(input);
+    return;
+  }
+
+  // Resolve standard routes
+  const path = resolveNavaiRoute(input, NAVAI_ROUTE_ITEMS);
+  if (path) {
+    router.navigate(path);
+  }
+};
+```
+
+### Conditional Routes
+
+Filter routes based on user permissions or state:
+
+```typescript
+const allRoutes: NavaiRoute[] = [
+  {
+    name: "admin",
+    path: "/admin",
+    description: "Admin panel",
+    synonyms: ["administracion", "panel de control"]
+  },
+  // ... other routes
+];
+
+const userRoutes = user.isAdmin
+  ? allRoutes
+  : allRoutes.filter(route => route.name !== "admin");
+
+const agent = useWebVoiceAgent({
+  defaultRoutes: userRoutes,
+  // ...
+});
+```
+
+## Custom Routes File
+
+By default, NAVAI looks for routes at `src/ai/routes.ts`. To use a custom path:
+
+### Environment Variable
+
+```bash .env
+NAVAI_ROUTES_FILE=src/config/voice-routes.ts
+```
+
+### Programmatic Configuration
+
+```typescript
+const agent = useWebVoiceAgent({
+  env: {
+    NAVAI_ROUTES_FILE: "src/config/voice-routes.ts"
+  }
+});
+```
+
+## Integration with Routers
+
+### React Router
+
+```typescript
+import { useNavigate } from "react-router-dom";
+import { useWebVoiceAgent } from "@navai/voice-frontend";
+
+const navigate = useNavigate();
+const agent = useWebVoiceAgent({
+  navigate, // React Router's navigate function
+  // ...
+});
+```
+
+### React Navigation (React Native)
+
+```typescript
+import { useNavigation } from "@react-navigation/native";
+
+const navigation = useNavigation();
+const navigate = (path: string) => {
+  // Map paths to screen names
+  const screenMap = {
+    "/": "Home",
+    "/profile": "Profile",
+    "/settings": "Settings"
+  };
+  const screenName = screenMap[path];
+  if (screenName) {
+    navigation.navigate(screenName);
+  }
+};
+
+const agent = useMobileVoiceAgent({
+  navigate,
+  // ...
+});
+```
+
+### Expo Router
+
+```typescript
+import { router } from "expo-router";
+
+const navigate = (path: string) => {
+  router.push(path);
+};
+
+const agent = useMobileVoiceAgent({
+  navigate,
+  // ...
+});
+```
+
+## Multilingual Support
+
+Include translations in synonyms:
+
+```typescript
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "home",
+    path: "/",
+    description: "Landing page / Página principal",
+    synonyms: [
+      // English
+      "home", "main", "start", "landing",
+      // Spanish
+      "inicio", "principal", "comienzo",
+      // French
+      "accueil", "début"
+    ]
+  }
+];
+```
+
+<Tip>
+Configure the agent's language via `OPENAI_REALTIME_LANGUAGE` in backend `.env`.
+</Tip>
+
+## Debugging Route Resolution
+
+Test route resolution manually:
+
+```typescript
+import { resolveNavaiRoute } from "@navai/voice-frontend";
+import { NAVAI_ROUTE_ITEMS } from "./ai/routes";
+
+const testInputs = [
+  "llevame a inicio",
+  "abre configuracion",
+  "help",
+  "perfil de usuario"
+];
+
+testInputs.forEach(input => {
+  const path = resolveNavaiRoute(input, NAVAI_ROUTE_ITEMS);
+  console.log(`"${input}" → ${path ?? "(no match)"}`);
+});
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use descriptive names">
+    Make `name` and `description` clear and specific
+  </Step>
+
+  <Step title="Include comprehensive synonyms">
+    Add translations, variations, and common misspellings
+  </Step>
+
+  <Step title="Order by priority">
+    Put most important/common routes first in the array
+  </Step>
+
+  <Step title="Keep paths consistent">
+    Match your router configuration exactly
+  </Step>
+
+  <Step title="Test with real voice input">
+    Try various phrasings to ensure good matches
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+### Agent navigates to wrong route
+
+**Cause:** Ambiguous synonyms or overlapping route names
+
+**Solution:** Make synonyms more specific and unique
+
+### Agent says "route not found"
+
+**Cause:** User input doesn't match any route
+
+**Solution:** Add more synonyms or check route configuration
+
+### Dynamic routes don't work
+
+**Cause:** `resolveNavaiRoute` can't handle parameters
+
+**Solution:** Implement custom logic in your `navigate` function
+
+## Next Steps
+
+- [Web Integration](/guides/web-integration) - Use routes in web apps
+- [Mobile Integration](/guides/mobile-integration) - Use routes in mobile apps
+- [Function Modules](/guides/function-modules) - Extend beyond navigation
+
+## Related API Reference
+
+- [NavaiRoute](/api/frontend/types#navairoute)
+- [resolveNavaiRoute](/api/frontend/resolve-route)
+- [getNavaiRoutePromptLines](/api/frontend/get-route-prompt-lines)

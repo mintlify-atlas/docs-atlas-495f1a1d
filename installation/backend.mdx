@@ -1,0 +1,153 @@
+---
+title: "Installing @navai/voice-backend"
+description: "Backend helpers to mint OpenAI Realtime client secrets and manage voice agent tools"
+---
+
+## Overview
+
+`@navai/voice-backend` provides backend infrastructure for Navai voice applications. It handles two core responsibilities:
+
+1. Minting secure ephemeral `client_secret` tokens for OpenAI Realtime API
+2. Discovering, validating, exposing, and executing backend tools from your codebase
+
+## Prerequisites
+
+### Node.js Version
+
+- Node.js 18.x or later recommended
+
+### Peer Dependencies
+
+You must have Express installed in your project:
+
+- **express**: `^4.18.0` or `^5.0.0`
+
+## Installation
+
+<CodeGroup>
+
+```bash npm
+npm install @navai/voice-backend
+```
+
+```bash yarn
+yarn add @navai/voice-backend
+```
+
+```bash pnpm
+pnpm add @navai/voice-backend
+```
+
+</CodeGroup>
+
+### Install Peer Dependencies
+
+If you don't already have Express installed:
+
+<CodeGroup>
+
+```bash npm
+npm install express
+```
+
+```bash yarn
+yarn add express
+```
+
+```bash pnpm
+pnpm add express
+```
+
+</CodeGroup>
+
+## Environment Variables
+
+Create a `.env` file in your project root with the following variables:
+
+```bash
+# Required: OpenAI API key for minting client secrets
+OPENAI_API_KEY=sk-...
+
+# Optional: Realtime configuration
+OPENAI_REALTIME_MODEL=gpt-realtime
+OPENAI_REALTIME_VOICE=marin
+OPENAI_REALTIME_CLIENT_SECRET_TTL=600
+
+# Optional: Function discovery
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+NAVAI_FUNCTIONS_BASE_DIR=.
+
+# Optional: Security
+NAVAI_ALLOW_FRONTEND_API_KEY=false
+```
+
+## Quick Start
+
+Add Navai routes to your Express application:
+
+```typescript
+import express from "express";
+import { registerNavaiExpressRoutes } from "@navai/voice-backend";
+
+const app = express();
+app.use(express.json());
+
+registerNavaiExpressRoutes(app, {
+  backendOptions: {
+    openaiApiKey: process.env.OPENAI_API_KEY,
+    defaultModel: "gpt-realtime",
+    defaultVoice: "marin",
+    clientSecretTtlSeconds: 600
+  }
+});
+
+app.listen(3000, () => {
+  console.log("Server running on http://localhost:3000");
+});
+```
+
+## Registered Routes
+
+The `registerNavaiExpressRoutes` function automatically registers these endpoints:
+
+- `POST /navai/realtime/client-secret` - Mint ephemeral client secrets
+- `GET /navai/functions` - List available backend tools
+- `POST /navai/functions/execute` - Execute backend tools
+
+## Verification
+
+Test your installation by checking the health of your backend routes:
+
+```bash
+# Start your server
+node server.js
+
+# In another terminal, test the functions endpoint
+curl http://localhost:3000/navai/functions
+```
+
+You should receive a JSON response listing available functions:
+
+```json
+{
+  "items": [],
+  "warnings": []
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Backend Configuration" icon="gear" href="/guides/environment-variables">
+    Configure backend options, security policies, and function discovery
+  </Card>
+  <Card title="Backend Tools" icon="wrench" href="/guides/backend-setup">
+    Learn how to create and expose backend tools for your voice agent
+  </Card>
+  <Card title="Client Secret Flow" icon="key" href="/api/backend/client-secret">
+    Understand the client secret authentication flow
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/backend/overview">
+    Explore the full backend API documentation
+  </Card>
+</CardGroup>

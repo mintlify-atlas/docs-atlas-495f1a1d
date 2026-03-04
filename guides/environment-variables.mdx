@@ -1,0 +1,459 @@
+---
+title: 'Environment Variables'
+description: 'Complete reference for NAVAI environment variables'
+---
+
+## Overview
+
+NAVAI uses environment variables to configure backend and frontend/mobile behavior. This guide covers all available variables and their usage.
+
+## Backend Variables
+
+Configure your Express backend with these variables in `.env`:
+
+### OpenAI Configuration
+
+#### `OPENAI_API_KEY`
+
+**Required.** Your OpenAI API key for Realtime API access.
+
+```bash
+OPENAI_API_KEY=sk-proj-...
+```
+
+<Warning>
+Keep this secret and server-side only. Never commit to version control or expose to clients.
+</Warning>
+
+#### `OPENAI_REALTIME_MODEL`
+
+**Optional.** The OpenAI Realtime model to use.
+
+**Default:** `gpt-realtime`
+
+```bash
+OPENAI_REALTIME_MODEL=gpt-realtime
+```
+
+#### `OPENAI_REALTIME_VOICE`
+
+**Optional.** The voice for the agent to use.
+
+**Default:** `marin`
+
+**Options:** `marin`, `verse`, `alloy`, `echo`, `shimmer`
+
+```bash
+OPENAI_REALTIME_VOICE=marin
+```
+
+#### `OPENAI_REALTIME_INSTRUCTIONS`
+
+**Optional.** Custom system instructions for the agent.
+
+**Default:** `"You are a helpful assistant."`
+
+```bash
+OPENAI_REALTIME_INSTRUCTIONS=You are a helpful navigation assistant for a mobile banking app.
+```
+
+#### `OPENAI_REALTIME_LANGUAGE`
+
+**Optional.** The language the agent should speak.
+
+**Default:** Not set (English)
+
+```bash
+OPENAI_REALTIME_LANGUAGE=Spanish
+```
+
+#### `OPENAI_REALTIME_VOICE_ACCENT`
+
+**Optional.** The accent for the voice.
+
+**Default:** Not set
+
+```bash
+OPENAI_REALTIME_VOICE_ACCENT=neutral Latin American Spanish
+```
+
+#### `OPENAI_REALTIME_VOICE_TONE`
+
+**Optional.** The tone of voice.
+
+**Default:** Not set
+
+```bash
+OPENAI_REALTIME_VOICE_TONE=friendly and professional
+```
+
+#### `OPENAI_REALTIME_CLIENT_SECRET_TTL`
+
+**Optional.** Time-to-live for client secrets in seconds.
+
+**Default:** `600` (10 minutes)
+
+**Range:** `10` to `7200` (2 hours)
+
+```bash
+OPENAI_REALTIME_CLIENT_SECRET_TTL=600
+```
+
+### NAVAI Backend Configuration
+
+#### `NAVAI_ALLOW_FRONTEND_API_KEY`
+
+**Optional.** Allow frontend to provide OpenAI API keys.
+
+**Default:** `false` (if `OPENAI_API_KEY` is set)
+
+**Values:** `true`, `false`, `1`, `0`
+
+```bash
+NAVAI_ALLOW_FRONTEND_API_KEY=false
+```
+
+<Warning>
+**Production:** Always set to `false` in production.
+
+**Development:** Can be `true` for testing with different API keys.
+</Warning>
+
+#### `NAVAI_FUNCTIONS_FOLDERS`
+
+**Optional.** Paths to scan for backend function modules.
+
+**Default:** `src/ai/functions-modules`
+
+**Format:** Comma-separated paths with optional wildcards
+
+```bash
+# Single folder
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+
+# Recursive folder
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules/...
+
+# Multiple folders
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules,src/features/*/voice-functions
+
+# Wildcard pattern
+NAVAI_FUNCTIONS_FOLDERS=src/features/*/voice-functions
+
+# Explicit file
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules/secret.ts
+```
+
+#### `NAVAI_FUNCTIONS_BASE_DIR`
+
+**Optional.** Base directory for function folder resolution.
+
+**Default:** `process.cwd()`
+
+```bash
+NAVAI_FUNCTIONS_BASE_DIR=/app/src
+```
+
+### Server Configuration
+
+#### `PORT`
+
+**Optional.** Port for the Express server.
+
+**Default:** `3000`
+
+```bash
+PORT=3000
+```
+
+#### `NAVAI_CORS_ORIGIN`
+
+**Optional.** Allowed CORS origins (comma-separated).
+
+**Default:** Not set (no CORS)
+
+```bash
+# Single origin
+NAVAI_CORS_ORIGIN=http://localhost:5173
+
+# Multiple origins
+NAVAI_CORS_ORIGIN=http://localhost:5173,http://localhost:8081
+
+# Allow all (development only!)
+NAVAI_CORS_ORIGIN=*
+```
+
+<Warning>
+Never use `*` in production. Whitelist specific origins only.
+</Warning>
+
+## Frontend Variables (Web)
+
+Configure your React web app with these variables in `.env`:
+
+### Required
+
+#### `NAVAI_API_URL`
+
+**Required.** The URL of your NAVAI backend API.
+
+```bash
+NAVAI_API_URL=http://localhost:3000
+```
+
+### Optional
+
+#### `NAVAI_ROUTES_FILE`
+
+**Optional.** Path to the routes configuration file.
+
+**Default:** `src/ai/routes.ts`
+
+```bash
+NAVAI_ROUTES_FILE=src/config/voice-routes.ts
+```
+
+#### `NAVAI_FUNCTIONS_FOLDERS`
+
+**Optional.** Paths to scan for frontend function modules.
+
+**Default:** `src/ai/functions-modules`
+
+**Format:** Same as backend (comma-separated, wildcards supported)
+
+```bash
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+```
+
+#### `NAVAI_REALTIME_MODEL`
+
+**Optional.** Override the Realtime model from backend.
+
+**Default:** Uses backend setting
+
+```bash
+NAVAI_REALTIME_MODEL=gpt-realtime
+```
+
+## Frontend Variables (Mobile)
+
+Configure your React Native/Expo app with these variables:
+
+### Expo Configuration
+
+Add to `app.config.js` or `app.json`:
+
+```javascript app.config.js
+export default {
+  expo: {
+    extra: {
+      NAVAI_API_URL: process.env.NAVAI_API_URL || "http://192.168.1.100:3000",
+      NAVAI_FUNCTIONS_FOLDERS: "src/ai/functions-modules",
+      NAVAI_ROUTES_FILE: "src/ai/routes.ts"
+    }
+  }
+};
+```
+
+### Environment File
+
+Create `.env`:
+
+```bash
+# Required: Backend API URL (use LAN IP for physical devices)
+NAVAI_API_URL=http://192.168.1.100:3000
+
+# Optional: Functions folder
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+
+# Optional: Routes file
+NAVAI_ROUTES_FILE=src/ai/routes.ts
+```
+
+<Warning>
+For physical devices and emulators, use your machine's LAN IP address, not `localhost`.
+
+Find your IP:
+- macOS/Linux: `ifconfig | grep inet`
+- Windows: `ipconfig`
+</Warning>
+
+### Reading in Code
+
+```typescript
+import Constants from "expo-constants";
+import { resolveNavaiMobileEnv } from "@navai/voice-mobile";
+
+function readEnv() {
+  const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
+  return resolveNavaiMobileEnv({
+    sources: [extra, process.env as Record<string, unknown>]
+  });
+}
+
+const env = readEnv();
+const apiUrl = env.NAVAI_API_URL;
+```
+
+## Setup Scripts
+
+Auto-setup adds these npm scripts:
+
+### Backend
+
+No automatic scripts. Manually configure as needed.
+
+### Frontend (Web)
+
+```json package.json
+{
+  "scripts": {
+    "generate:module-loaders": "navai-generate-web-loaders",
+    "predev": "npm run generate:module-loaders",
+    "prebuild": "npm run generate:module-loaders",
+    "pretypecheck": "npm run generate:module-loaders",
+    "prelint": "npm run generate:module-loaders"
+  }
+}
+```
+
+### Frontend (Mobile)
+
+```json package.json
+{
+  "scripts": {
+    "generate:ai-modules": "navai-generate-mobile-loaders",
+    "prestart": "npm run generate:ai-modules"
+  }
+}
+```
+
+### Disable Auto-Setup
+
+```bash
+# Disable all auto-setup
+NAVAI_SKIP_AUTO_SETUP=1
+
+# Disable only frontend auto-setup
+NAVAI_SKIP_FRONTEND_AUTO_SETUP=1
+
+# Disable only mobile auto-setup
+NAVAI_SKIP_MOBILE_AUTO_SETUP=1
+
+# Disable only backend auto-setup
+NAVAI_SKIP_BACKEND_AUTO_SETUP=1
+```
+
+## Environment-Specific Configuration
+
+### Development
+
+```bash .env.development
+OPENAI_API_KEY=sk-proj-...
+PORT=3000
+NAVAI_CORS_ORIGIN=http://localhost:5173,http://localhost:8081
+NAVAI_ALLOW_FRONTEND_API_KEY=true
+OPENAI_REALTIME_CLIENT_SECRET_TTL=600
+```
+
+### Production
+
+```bash .env.production
+OPENAI_API_KEY=sk-proj-...
+PORT=8080
+NAVAI_CORS_ORIGIN=https://myapp.com,https://www.myapp.com
+NAVAI_ALLOW_FRONTEND_API_KEY=false
+OPENAI_REALTIME_CLIENT_SECRET_TTL=3600
+```
+
+## Validation
+
+NAVAI validates environment variables at runtime:
+
+### Backend Validation
+
+- `OPENAI_API_KEY`: Required if `NAVAI_ALLOW_FRONTEND_API_KEY=false`
+- `OPENAI_REALTIME_CLIENT_SECRET_TTL`: Must be 10-7200
+- `NAVAI_FUNCTIONS_FOLDERS`: Warns if no files match
+
+### Frontend Validation
+
+- `NAVAI_API_URL`: Required (throws error if missing)
+- `NAVAI_ROUTES_FILE`: Warns if file not found (falls back to default routes)
+- `NAVAI_FUNCTIONS_FOLDERS`: Warns if no files match
+
+## Troubleshooting
+
+### "Missing openaiApiKey in NavaiVoiceBackendOptions"
+
+Ensure `OPENAI_API_KEY` is set in backend `.env` and loaded with `dotenv/config`.
+
+### "NAVAI_API_URL is required"
+
+Ensure frontend/mobile `.env` contains:
+```bash
+NAVAI_API_URL=http://localhost:3000
+```
+
+### "clientSecretTtlSeconds must be between 10 and 7200"
+
+Set a valid TTL:
+```bash
+OPENAI_REALTIME_CLIENT_SECRET_TTL=600
+```
+
+### "Passing apiKey from request is disabled"
+
+Either:
+1. Set `OPENAI_API_KEY` in backend `.env`
+2. Or allow frontend keys: `NAVAI_ALLOW_FRONTEND_API_KEY=true`
+
+### "CORS blocked for origin: ..."
+
+Add the origin to `NAVAI_CORS_ORIGIN`:
+```bash
+NAVAI_CORS_ORIGIN=http://localhost:5173,http://localhost:8081
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Use .env files">
+    Never hardcode secrets. Use `.env` files and add them to `.gitignore`.
+  </Step>
+
+  <Step title="Environment-specific configs">
+    Use `.env.development`, `.env.production`, etc. for different environments.
+  </Step>
+
+  <Step title="Validate on startup">
+    Check required variables early in your app initialization.
+  </Step>
+
+  <Step title="Document your variables">
+    Create a `.env.example` with placeholder values:
+    ```bash
+    OPENAI_API_KEY=sk-...
+    PORT=3000
+    NAVAI_CORS_ORIGIN=http://localhost:5173
+    ```
+  </Step>
+
+  <Step title="Secure production">
+    - Keep `NAVAI_ALLOW_FRONTEND_API_KEY=false`
+    - Whitelist CORS origins (never use `*`)
+    - Use environment secrets management (AWS Secrets Manager, etc.)
+  </Step>
+</Steps>
+
+## Next Steps
+
+- [Backend Setup](/guides/backend-setup) - Configure your Express backend
+- [Web Integration](/guides/web-integration) - Set up a React web app
+- [Mobile Integration](/guides/mobile-integration) - Set up a React Native app
+
+## Related API Reference
+
+- [NavaiVoiceBackendOptions](/api/backend/types#navaivoicebackendoptions)
+- [UseWebVoiceAgentOptions](/api/frontend/overview/types#usewebvoiceagentoptions)
+- [resolveNavaiMobileEnv](/api/mobile/resolve-env)

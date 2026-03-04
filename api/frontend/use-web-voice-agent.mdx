@@ -1,0 +1,340 @@
+---
+title: useWebVoiceAgent
+description: React hook for voice agent integration
+---
+
+## Overview
+
+The `useWebVoiceAgent` hook manages the complete lifecycle of a Navai voice agent in React applications. It handles connection management, authentication, function loading, and real-time communication.
+
+## Import
+
+```tsx
+import { useWebVoiceAgent } from '@navai/voice-frontend';
+```
+
+## Type Signature
+
+```typescript
+function useWebVoiceAgent(
+  options: UseWebVoiceAgentOptions
+): UseWebVoiceAgentResult
+```
+
+## Parameters
+
+<ParamField path="options" type="UseWebVoiceAgentOptions" required>
+  Configuration options for the voice agent
+
+  <ParamField path="navigate" type="(path: string) => void" required>
+    Navigation function called when agent navigates to a route
+    
+    ```tsx
+    // React Router v6
+    navigate: (path) => router.push(path)
+    
+    // Next.js
+    navigate: (path) => router.push(path)
+    ```
+  </ParamField>
+
+  <ParamField path="moduleLoaders" type="NavaiFunctionModuleLoaders" required>
+    Map of module paths to dynamic import functions
+    
+    ```tsx
+    moduleLoaders: {
+      './functions/search.ts': () => import('./functions/search'),
+      './functions/profile.ts': () => import('./functions/profile')
+    }
+    ```
+  </ParamField>
+
+  <ParamField path="defaultRoutes" type="NavaiRoute[]" required>
+    Array of route definitions for navigation
+    
+    ```tsx
+    defaultRoutes: [
+      {
+        name: 'home',
+        path: '/',
+        description: 'Home page',
+        synonyms: ['main', 'dashboard']
+      },
+      {
+        name: 'profile',
+        path: '/profile',
+        description: 'User profile page'
+      }
+    ]
+    ```
+  </ParamField>
+
+  <ParamField path="env" type="Record<string, string | undefined>">
+    Environment variables (optional)
+    
+    ```tsx
+    env: {
+      NAVAI_API_URL: 'https://api.example.com'
+    }
+    ```
+  </ParamField>
+
+  <ParamField path="apiBaseUrl" type="string">
+    Backend API base URL (defaults to `http://localhost:3000`)
+  </ParamField>
+
+  <ParamField path="routesFile" type="string">
+    Path to routes configuration file
+  </ParamField>
+
+  <ParamField path="functionsFolders" type="string">
+    Comma-separated list of function folders
+  </ParamField>
+
+  <ParamField path="modelOverride" type="string">
+    OpenAI model override (e.g., `gpt-4o-realtime-preview-2024-12-17`)
+  </ParamField>
+
+  <ParamField path="defaultRoutesFile" type="string">
+    Path to default routes file
+  </ParamField>
+
+  <ParamField path="defaultFunctionsFolder" type="string">
+    Default functions folder path
+  </ParamField>
+</ParamField>
+
+## Return Value
+
+<ResponseField name="status" type="VoiceStatus" required>
+  Current connection status: `"idle"` | `"connecting"` | `"connected"` | `"error"`
+</ResponseField>
+
+<ResponseField name="error" type="string | null" required>
+  Error message if status is `"error"`, otherwise `null`
+</ResponseField>
+
+<ResponseField name="isConnecting" type="boolean" required>
+  `true` when status is `"connecting"`
+</ResponseField>
+
+<ResponseField name="isConnected" type="boolean" required>
+  `true` when status is `"connected"`
+</ResponseField>
+
+<ResponseField name="start" type="() => Promise<void>" required>
+  Async function to start the voice agent connection
+  
+  - Creates backend client secret
+  - Loads backend functions
+  - Builds agent with all functions and routes
+  - Establishes Realtime connection
+  - Updates status to `"connected"` on success or `"error"` on failure
+</ResponseField>
+
+<ResponseField name="stop" type="() => void" required>
+  Function to stop the voice agent connection
+  
+  - Closes the Realtime session
+  - Resets status to `"idle"`
+  - Cleans up session reference
+</ResponseField>
+
+## Examples
+
+### Basic Usage
+
+```tsx
+import { useWebVoiceAgent } from '@navai/voice-frontend';
+import { useNavigate } from 'react-router-dom';
+
+function VoiceControl() {
+  const navigate = useNavigate();
+  
+  const { status, error, start, stop } = useWebVoiceAgent({
+    navigate,
+    moduleLoaders: {
+      './functions/search.ts': () => import('./functions/search')
+    },
+    defaultRoutes: [
+      { name: 'home', path: '/', description: 'Home page' }
+    ]
+  });
+
+  return (
+    <div>
+      <button onClick={status === 'connected' ? stop : start}>
+        {status === 'connected' ? 'Stop' : 'Start'} Voice
+      </button>
+      {error && <p>Error: {error}</p>}
+    </div>
+  );
+}
+```
+
+### With Loading State
+
+```tsx
+function VoiceButton() {
+  const { status, isConnecting, isConnected, start, stop } = useWebVoiceAgent({
+    navigate: (path) => router.push(path),
+    moduleLoaders: {
+      './functions/search.ts': () => import('./functions/search')
+    },
+    defaultRoutes: []
+  });
+
+  return (
+    <button onClick={isConnected ? stop : start} disabled={isConnecting}>
+      {isConnecting && 'Connecting...'}
+      {isConnected && 'Stop Voice'}
+      {status === 'idle' && 'Start Voice'}
+      {status === 'error' && 'Retry'}
+    </button>
+  );
+}
+```
+
+### With Custom Backend URL
+
+```tsx
+const { start, stop } = useWebVoiceAgent({
+  navigate,
+  moduleLoaders,
+  defaultRoutes,
+  apiBaseUrl: 'https://api.example.com',
+  env: {
+    NAVAI_API_URL: 'https://api.example.com'
+  }
+});
+```
+
+### With Model Override
+
+```tsx
+const { start, stop } = useWebVoiceAgent({
+  navigate,
+  moduleLoaders,
+  defaultRoutes,
+  modelOverride: 'gpt-4o-realtime-preview-2024-12-17'
+});
+```
+
+### With Multiple Function Modules
+
+```tsx
+const { start, stop } = useWebVoiceAgent({
+  navigate,
+  moduleLoaders: {
+    './functions/search.ts': () => import('./functions/search'),
+    './functions/profile.ts': () => import('./functions/profile'),
+    './functions/settings.ts': () => import('./functions/settings'),
+    './functions/analytics.ts': () => import('./functions/analytics')
+  },
+  defaultRoutes: [
+    { name: 'search', path: '/search', description: 'Search page' },
+    { name: 'profile', path: '/profile', description: 'User profile' },
+    { name: 'settings', path: '/settings', description: 'Settings' }
+  ]
+});
+```
+
+## State Flow
+
+```
+┌──────┐  start()  ┌────────────┐  success  ┌───────────┐
+│ idle ├──────────►│ connecting ├──────────►│ connected │
+└──┬───┘           └─────┬──────┘           └─────┬─────┘
+   │                     │                        │
+   │                     │ error                  │
+   │                     ▼                        │
+   │                  ┌───────┐                   │
+   │◄─────────────────┤ error │                   │
+   │      retry       └───────┘                   │
+   │                                               │
+   │◄──────────────────────────────────────────────┘
+                     stop()
+```
+
+## Lifecycle
+
+1. **Initialization** (`idle`)
+   - Hook mounts with idle status
+   - Configuration is memoized
+   - Backend client is created
+
+2. **Connection** (`connecting`)
+   - `start()` is called
+   - Backend client secret is created
+   - Backend functions are loaded
+   - Agent is built with all functions and routes
+   - Realtime session is established
+
+3. **Active** (`connected`)
+   - Voice agent is active
+   - User can interact via voice
+   - Functions and navigation work
+
+4. **Error** (`error`)
+   - Connection or function execution failed
+   - Error message is available in `error` field
+   - Can retry by calling `start()` again
+
+5. **Cleanup**
+   - `stop()` is called or component unmounts
+   - Session is closed
+   - Status returns to `idle`
+
+## Error Handling
+
+The hook handles errors at multiple levels:
+
+```tsx
+function VoiceWithErrorHandling() {
+  const { status, error, start, stop } = useWebVoiceAgent({
+    navigate,
+    moduleLoaders,
+    defaultRoutes
+  });
+
+  useEffect(() => {
+    if (status === 'error') {
+      console.error('Voice agent error:', error);
+      // Optionally log to error tracking service
+    }
+  }, [status, error]);
+
+  return (
+    <div>
+      {status === 'error' && (
+        <div className="error">
+          <p>{error}</p>
+          <button onClick={start}>Retry</button>
+        </div>
+      )}
+      <button onClick={status === 'connected' ? stop : start}>
+        {status === 'connected' ? 'Stop' : 'Start'}
+      </button>
+    </div>
+  );
+}
+```
+
+## Warnings
+
+The hook emits console warnings for:
+
+- Runtime configuration warnings
+- Backend function loading issues
+- Function name conflicts
+- Invalid tool names
+- Duplicate functions
+
+Warnings are logged to console but don't prevent the agent from working.
+
+## Related
+
+- [buildNavaiAgent](/api/frontend/build-agent) - Agent building implementation
+- [createNavaiBackendClient](/api/frontend/backend-client) - Backend client
+- [loadNavaiFunctions](/api/frontend/functions) - Function loading
+- [Types](/api/frontend/types) - Type definitions

@@ -1,0 +1,675 @@
+---
+title: Voice-Driven UI Navigation
+description: How NAVAI resolves routes and enables voice navigation
+icon: "route"
+---
+
+## Overview
+
+NAVAI enables users to navigate applications using natural voice commands through **intelligent route resolution**. The system matches user intent to defined routes using path matching, name recognition, synonyms, and fuzzy search.
+
+## Route Definition
+
+### 1. Route Structure
+
+**Type Definition** (`routes.ts:1-6`):
+
+```typescript
+export type NavaiRoute = {
+  name: string; // Primary route identifier
+  path: string; // Navigation target
+  description: string; // AI context (how to reach this route)
+  synonyms?: string[]; // Alternative names/phrases
+};
+```
+
+**Example Routes File** (`src/ai/routes.ts`):
+
+```typescript
+import type { NavaiRoute } from "@navai/voice-frontend";
+
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "home",
+    path: "/",
+    description: "Main landing page",
+    synonyms: ["inicio", "main", "dashboard"]
+  },
+  {
+    name: "profile",
+    path: "/profile",
+    description: "User profile settings",
+    synonyms: ["perfil", "account", "mi cuenta"]
+  },
+  {
+    name: "settings",
+    path: "/settings",
+    description: "Application settings",
+    synonyms: ["ajustes", "configuración", "preferences"]
+  },
+  {
+    name: "products",
+    path: "/products",
+    description: "Product catalog",
+    synonyms: ["catalog", "shop", "store"]
+  }
+];
+```
+
+<Info>
+The export name must be one of: `NAVAI_ROUTE_ITEMS`, `NAVAI_ROUTES`, `APP_ROUTES`, `routes`, or `default`.
+</Info>
+
+### 2. Multilingual Support
+
+**Unicode Normalization** (`routes.ts:8-14`):
+
+```typescript
+function normalize(value: string): string {
+  return value
+    .normalize("NFD") // Decompose accented characters
+    .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
+    .trim()
+    .toLowerCase();
+}
+```
+
+**Examples**:
+
+| Original | Normalized | Matches |
+|----------|------------|--------|
+| `Configuración` | `configuracion` | "configuracion", "Configuración" |
+| `Início` | `inicio` | "inicio", "Início" |
+| `Café` | `cafe` | "cafe", "Café" |
+
+**Use Case**:
+
+```typescript
+const routes: NavaiRoute[] = [
+  {
+    name: "configuración",
+    path: "/settings",
+    description: "Ajustes de la aplicación",
+    synonyms: ["settings", "ajustes", "preferencias"]
+  }
+];
+
+// User says: "Go to configuracion" → Matches "configuración"
+// User says: "Abrir ajustes" → Matches via synonym
+```
+
+## Route Resolution Algorithm
+
+### 1. Matching Strategy
+
+**Resolution Function** (`routes.ts:16-33`):
+
+```typescript
+export function resolveNavaiRoute(
+  input: string,
+  routes: NavaiRoute[] = []
+): string | null {
+  const normalized = normalize(input);
+  
+  // 1. Exact path match
+  const direct = routes.find(
+    (route) => normalize(route.path) === normalized
+  );
+  if (direct) return direct.path;
+  
+  // 2. Exact name or synonym match
+  for (const route of routes) {
+    if (normalize(route.name) === normalized) return route.path;
+    if (route.synonyms?.some(
+      (synonym) => normalize(synonym) === normalized
+    )) {
+      return route.path;
+    }
+  }
+  
+  // 3. Partial match (fuzzy search)
+  for (const route of routes) {
+    if (normalized.includes(normalize(route.name))) return route.path;
+    if (route.synonyms?.some(
+      (synonym) => normalized.includes(normalize(synonym))
+    )) {
+      return route.path;
+    }
+  }
+  
+  return null; // No match found
+}
+```
+
+### 2. Matching Precedence
+
+**Priority Order**:
+
+1. **Exact path match**: `/settings` → `/settings`
+2. **Exact name match**: `settings` → `/settings`
+3. **Exact synonym match**: `ajustes` → `/settings`
+4. **Partial name match**: `go to settings page` → `/settings`
+5. **Partial synonym match**: `open ajustes` → `/settings`
+
+**Examples**:
+
+```typescript
+const routes: NavaiRoute[] = [
+  {
+    name: "user-profile",
+    path: "/profile",
+    description: "User profile",
+    synonyms: ["account", "my account"]
+  }
+];
+
+// Exact matches
+resolveNavaiRoute("/profile", routes) // → "/profile" (path)
+resolveNavaiRoute("user-profile", routes) // → "/profile" (name)
+resolveNavaiRoute("account", routes) // → "/profile" (synonym)
+
+// Partial matches
+resolveNavaiRoute("go to user-profile", routes) // → "/profile"
+resolveNavaiRoute("open my account", routes) // → "/profile"
+
+// No match
+resolveNavaiRoute("dashboard", routes) // → null
+```
+
+### 3. Ambiguity Handling
+
+**First Match Wins**:
+
+```typescript
+const routes: NavaiRoute[] = [
+  { name: "settings", path: "/settings", description: "App settings" },
+  { name: "account-settings", path: "/account/settings", description: "Account settings" }
+];
+
+// "settings" matches first route
+resolveNavaiRoute("settings", routes) // → "/settings"
+
+// "account settings" matches second route (partial synonym)
+resolveNavaiRoute("account settings", routes) // → "/account/settings"
+```
+
+<Warning>
+If multiple routes could match, the **first matching route** in the array is returned. Order routes from most specific to least specific to avoid unintended matches.
+</Warning>
+
+## Navigation Tools
+
+### 1. Frontend Agent Tool
+
+**Tool Definition** (`agent.ts:165-183`):
+
+```typescript
+const navigateTool = tool({
+  name: "navigate_to",
+  description: "Navigate to an allowed route in the current app.",
+  parameters: z.object({
+    target: z
+      .string()
+      .min(1)
+      .describe(
+        "Route name or route path. Example: perfil, ajustes, /profile, /settings"
+      )
+  }),
+  execute: async ({ target }) => {
+    const path = resolveNavaiRoute(target, options.routes);
+    if (!path) {
+      return { ok: false, error: "Unknown or disallowed route." };
+    }
+    
+    options.navigate(path);
+    return { ok: true, path };
+  }
+});
+```
+
+**Usage from AI**:
+
+```json
+{
+  "type": "function_call",
+  "name": "navigate_to",
+  "arguments": {
+    "target": "settings"
+  }
+}
+```
+
+**Response**:
+
+```json
+{
+  "ok": true,
+  "path": "/settings"
+}
+```
+
+### 2. Mobile Agent Tool
+
+**Tool Execution** (`~/workspace/source/packages/voice-mobile/src/agent.ts:272-287`):
+
+```typescript
+async function executeNavigateTool(
+  payload: Record<string, unknown> | null
+): Promise<unknown> {
+  const target = readString(payload?.target)?.trim();
+  if (!target) {
+    return { ok: false, error: "target is required." };
+  }
+  
+  const path = resolveNavaiRoute(target, options.routes);
+  if (!path) {
+    return { ok: false, error: "Unknown or disallowed route." };
+  }
+  
+  options.navigate(path);
+  return { ok: true, path };
+}
+```
+
+**Mobile Event Flow**:
+
+```typescript
+import {
+  extractNavaiRealtimeToolCalls,
+  buildNavaiRealtimeToolResultEvents
+} from "@navai/voice-mobile";
+
+function handleRealtimeEvent(event: unknown) {
+  const toolCalls = extractNavaiRealtimeToolCalls(event);
+  
+  for (const call of toolCalls) {
+    if (call.name === "navigate_to") {
+      const output = await runtime.executeToolCall({
+        name: call.name,
+        payload: call.payload
+      });
+      
+      const resultEvents = buildNavaiRealtimeToolResultEvents({
+        callId: call.callId,
+        output
+      });
+      
+      for (const evt of resultEvents) {
+        transport.sendEvent?.(evt);
+      }
+    }
+  }
+}
+```
+
+## AI Instructions
+
+### 1. Prompt Generation
+
+**Route Prompt Lines** (`routes.ts:35-40`):
+
+```typescript
+export function getNavaiRoutePromptLines(
+  routes: NavaiRoute[] = []
+): string[] {
+  return routes.map((route) => {
+    const synonyms = route.synonyms?.length
+      ? `, aliases: ${route.synonyms.join(", ")}`
+      : "";
+    return `- ${route.name} (${route.path})${synonyms}`;
+  });
+}
+```
+
+**Generated Instructions** (`agent.ts:228-242`):
+
+```typescript
+const instructions = [
+  options.baseInstructions ?? "You are a voice assistant embedded in a web app.",
+  "Allowed routes:",
+  ...getNavaiRoutePromptLines(options.routes),
+  // Example output:
+  // - home (/), aliases: inicio, main, dashboard
+  // - profile (/profile), aliases: perfil, account, mi cuenta
+  // - settings (/settings), aliases: ajustes, configuración, preferences
+  "Allowed app functions:",
+  ...functionLines,
+  "Rules:",
+  "- If user asks to go/open a section, always call navigate_to.",
+  "- Never invent routes or function names that are not listed.",
+  "- If destination/action is unclear, ask a brief clarifying question."
+].join("\n");
+```
+
+### 2. Example Interactions
+
+**User**: "Go to settings"
+
+**AI**: Calls `navigate_to({ target: "settings" })`
+
+**Result**: `{ ok: true, path: "/settings" }`
+
+**AI Response**: "Opening settings."
+
+---
+
+**User**: "Abrir mi perfil" (Open my profile)
+
+**AI**: Calls `navigate_to({ target: "mi perfil" })`
+
+**Matching**:
+1. Normalize: `"mi perfil"` → `"mi perfil"`
+2. Check synonyms: `"profile"` has synonym `"mi cuenta"`
+3. Partial match: `"mi perfil"` contains... no direct match
+4. Check all synonyms: No exact match
+5. Check partial synonyms: `"perfil"` in `"mi perfil"` → Match!
+
+**Result**: `{ ok: true, path: "/profile" }`
+
+**AI Response**: "Abriendo tu perfil."
+
+---
+
+**User**: "Navigate to the dashboard"
+
+**AI**: Calls `navigate_to({ target: "dashboard" })`
+
+**Matching**:
+1. Exact path: No match
+2. Exact name: No match
+3. Exact synonym: `"home"` has synonym `"dashboard"` → Match!
+
+**Result**: `{ ok: true, path: "/" }`
+
+**AI Response**: "Taking you to the dashboard."
+
+---
+
+**User**: "Go to unknown page"
+
+**AI**: Calls `navigate_to({ target: "unknown page" })`
+
+**Result**: `{ ok: false, error: "Unknown or disallowed route." }`
+
+**AI Response**: "I'm sorry, I don't know how to navigate to 'unknown page'. You can go to home, profile, settings, or products."
+
+## Runtime Configuration
+
+### 1. Frontend Route Loading
+
+**Resolver** (`runtime.ts:87-124`):
+
+```typescript
+async function resolveRoutes(input: {
+  routesFile: string;
+  defaultRoutesFile: string;
+  defaultRoutes: NavaiRoute[];
+  loaderByPath: Map<string, IndexedLoader>;
+  warnings: string[];
+}): Promise<NavaiRoute[]> {
+  const candidates = buildModuleCandidates(input.routesFile);
+  
+  // Check if default routes file is requested
+  if (candidates.includes(input.defaultRoutesFile)) {
+    return input.defaultRoutes;
+  }
+  
+  // Find matching loader
+  const matchedLoader = candidates
+    .map((candidate) => input.loaderByPath.get(candidate))
+    .find(Boolean);
+  
+  if (!matchedLoader) {
+    input.warnings.push(
+      `[navai] Route module "${input.routesFile}" was not found. Falling back to "${input.defaultRoutesFile}".`
+    );
+    return input.defaultRoutes;
+  }
+  
+  try {
+    const imported = await matchedLoader.load();
+    const loadedRoutes = readRouteItems(imported);
+    
+    if (!loadedRoutes) {
+      input.warnings.push(
+        `[navai] Route module must export NavaiRoute[] (NAVAI_ROUTE_ITEMS or default). Falling back.`
+      );
+      return input.defaultRoutes;
+    }
+    
+    return loadedRoutes;
+  } catch (error) {
+    input.warnings.push(
+      `[navai] Failed to load route module: ${error.message}. Falling back.`
+    );
+    return input.defaultRoutes;
+  }
+}
+```
+
+**Environment Override**:
+
+```bash
+NAVAI_ROUTES_FILE="src/custom/routes.ts"
+```
+
+### 2. Module Candidates
+
+**File Resolution** (`runtime.ts:212-222`):
+
+```typescript
+function buildModuleCandidates(inputPath: string): string[] {
+  const normalized = normalizePath(inputPath);
+  const srcPrefixed = normalized.startsWith("src/")
+    ? normalized
+    : `src/${normalized}`;
+  const hasExtension = /\.[cm]?[jt]s$/.test(srcPrefixed);
+  
+  if (hasExtension) {
+    return [srcPrefixed];
+  }
+  
+  return [
+    srcPrefixed,
+    `${srcPrefixed}.ts`,
+    `${srcPrefixed}.js`,
+    `${srcPrefixed}/index.ts`,
+    `${srcPrefixed}/index.js`
+  ];
+}
+```
+
+**Examples**:
+
+| Input | Candidates |
+|-------|------------|
+| `src/ai/routes.ts` | `["src/ai/routes.ts"]` |
+| `ai/routes` | `["src/ai/routes", "src/ai/routes.ts", "src/ai/routes.js", ...]` |
+| `custom-routes` | `["src/custom-routes", "src/custom-routes.ts", ...]` |
+
+## Advanced Patterns
+
+### 1. Dynamic Routes
+
+```typescript
+import type { NavaiRoute } from "@navai/voice-frontend";
+
+// Generate routes from data
+const productCategories = ["electronics", "clothing", "food"];
+
+const categoryRoutes: NavaiRoute[] = productCategories.map((category) => ({
+  name: category,
+  path: `/products/${category}`,
+  description: `Browse ${category} products`,
+  synonyms: []
+}));
+
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  { name: "home", path: "/", description: "Home page" },
+  ...categoryRoutes
+];
+```
+
+### 2. Nested Routes
+
+```typescript
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "settings",
+    path: "/settings",
+    description: "Main settings page"
+  },
+  {
+    name: "account-settings",
+    path: "/settings/account",
+    description: "Account settings",
+    synonyms: ["profile settings", "user settings"]
+  },
+  {
+    name: "privacy-settings",
+    path: "/settings/privacy",
+    description: "Privacy settings",
+    synonyms: ["security settings"]
+  }
+];
+
+// User: "Go to privacy settings"
+// Matches: privacy-settings via name → /settings/privacy
+
+// User: "Open settings"
+// Matches: settings via name → /settings
+```
+
+### 3. Parameterized Routes
+
+```typescript
+// Routes with parameters require custom functions
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  {
+    name: "profile",
+    path: "/profile",
+    description: "Current user's profile"
+  }
+];
+
+// Custom function for parameterized navigation
+export function viewUserProfile(
+  params: { userId: string },
+  context: NavaiFunctionContext
+) {
+  context.navigate(`/users/${params.userId}`);
+  return { ok: true, userId: params.userId };
+}
+```
+
+### 4. Conditional Routes
+
+```typescript
+import type { NavaiRoute } from "@navai/voice-frontend";
+
+const baseRoutes: NavaiRoute[] = [
+  { name: "home", path: "/", description: "Home page" },
+  { name: "products", path: "/products", description: "Product catalog" }
+];
+
+const adminRoutes: NavaiRoute[] = [
+  { name: "admin", path: "/admin", description: "Admin dashboard" },
+  { name: "users", path: "/admin/users", description: "User management" }
+];
+
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  ...baseRoutes,
+  // Conditionally include admin routes
+  ...(process.env.NEXT_PUBLIC_USER_ROLE === "admin" ? adminRoutes : [])
+];
+```
+
+## Best Practices
+
+### 1. Descriptive Names
+
+```typescript
+// ✅ Good: Clear, descriptive names
+{ name: "product-catalog", path: "/products", description: "Browse products" }
+{ name: "shopping-cart", path: "/cart", description: "View cart" }
+
+// ❌ Bad: Ambiguous names
+{ name: "page1", path: "/products", description: "Products" }
+{ name: "p", path: "/profile", description: "Profile" }
+```
+
+### 2. Comprehensive Synonyms
+
+```typescript
+// ✅ Good: Multiple languages, common variations
+{
+  name: "settings",
+  path: "/settings",
+  description: "Application settings",
+  synonyms: [
+    "ajustes", // Spanish
+    "configuración", // Spanish
+    "preferences",
+    "options",
+    "config"
+  ]
+}
+
+// ❌ Bad: Missing obvious synonyms
+{
+  name: "settings",
+  path: "/settings",
+  description: "Settings"
+  // No synonyms
+}
+```
+
+### 3. Avoid Conflicts
+
+```typescript
+// ✅ Good: Specific, non-overlapping names
+const routes = [
+  { name: "user-profile", path: "/profile", description: "User profile" },
+  { name: "company-profile", path: "/company", description: "Company profile" }
+];
+
+// ❌ Bad: Ambiguous, overlapping names
+const routes = [
+  { name: "profile", path: "/profile", description: "Profile" },
+  { name: "profile-page", path: "/company", description: "Profile" }
+];
+```
+
+### 4. Logical Ordering
+
+```typescript
+// ✅ Good: Most specific first
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  { name: "account-settings", path: "/settings/account", ... },
+  { name: "privacy-settings", path: "/settings/privacy", ... },
+  { name: "settings", path: "/settings", ... } // General last
+];
+
+// ❌ Bad: General first (can cause incorrect matches)
+export const NAVAI_ROUTE_ITEMS: NavaiRoute[] = [
+  { name: "settings", path: "/settings", ... }, // Matches everything
+  { name: "account-settings", path: "/settings/account", ... }
+];
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Routes Setup" icon="map" href="/api/frontend/routes">
+    Configure routes in your application
+  </Card>
+  <Card title="Function Execution" icon="code" href="/concepts/function-execution">
+    Learn about function-based navigation
+  </Card>
+  <Card title="Voice Interaction" icon="microphone" href="/concepts/voice-interaction">
+    Understand the full voice flow
+  </Card>
+  <Card title="Mobile Navigation" icon="mobile" href="/guides/mobile-integration">
+    Implement navigation in mobile apps
+  </Card>
+</CardGroup>

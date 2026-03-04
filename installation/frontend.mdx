@@ -1,0 +1,202 @@
+---
+title: "Installing @navai/voice-frontend"
+description: "Frontend helpers to build OpenAI Realtime voice agents in web applications"
+---
+
+## Overview
+
+`@navai/voice-frontend` provides everything you need to build voice-enabled web applications with Navai. It removes boilerplate for client secret requests, navigation tools, dynamic function loading, backend function bridging, and React hook lifecycle management.
+
+## Prerequisites
+
+### Node.js Version
+
+- Node.js 18.x or later recommended
+
+### Peer Dependencies
+
+You must have React installed in your project:
+
+- **react**: `>=18`
+
+### Package Dependencies
+
+The package has these required dependencies (automatically installed):
+
+- **@openai/agents**: `^0.4.14`
+- **zod**: `^4.0.0`
+
+## Installation
+
+<CodeGroup>
+
+```bash npm
+npm install @navai/voice-frontend
+```
+
+```bash yarn
+yarn add @navai/voice-frontend
+```
+
+```bash pnpm
+pnpm add @navai/voice-frontend
+```
+
+</CodeGroup>
+
+### Install Peer Dependencies
+
+If you don't already have React 18+ installed:
+
+<CodeGroup>
+
+```bash npm
+npm install react@^18
+```
+
+```bash yarn
+yarn add react@^18
+```
+
+```bash pnpm
+pnpm add react@^18
+```
+
+</CodeGroup>
+
+## Post-Install Auto-Setup
+
+After installation, the package automatically runs a **postinstall script** that adds missing scripts to your `package.json`. This includes:
+
+- `generate:module-loaders` → Runs `navai-generate-web-loaders`
+- `predev` → Runs `npm run generate:module-loaders`
+- `prebuild` → Runs `npm run generate:module-loaders`
+- `pretypecheck` → Runs `npm run generate:module-loaders`
+- `prelint` → Runs `npm run generate:module-loaders`
+
+**Important:** Only missing scripts are added. Existing scripts are never overwritten.
+
+### Disable Auto-Setup
+
+To skip the auto-setup, set an environment variable before installation:
+
+```bash
+NAVAI_SKIP_AUTO_SETUP=1 npm install @navai/voice-frontend
+# or
+NAVAI_SKIP_FRONTEND_AUTO_SETUP=1 npm install @navai/voice-frontend
+```
+
+### Manual Setup
+
+If you skipped auto-setup, you can run it manually:
+
+```bash
+npx navai-setup-voice-frontend
+```
+
+## Environment Variables
+
+Create a `.env` file (or add to your existing environment configuration):
+
+```bash
+# Required: Backend API URL
+NAVAI_API_URL=http://localhost:3000
+
+# Optional: Function and route discovery
+NAVAI_FUNCTIONS_FOLDERS=src/ai/functions-modules
+NAVAI_ROUTES_FILE=src/ai/routes.ts
+
+# Optional: Realtime model override
+NAVAI_REALTIME_MODEL=gpt-realtime
+```
+
+## CLI Tools
+
+The package includes the following CLI tools:
+
+### navai-generate-web-loaders
+
+Generates module loaders for your voice agent functions and routes:
+
+```bash
+npx navai-generate-web-loaders
+```
+
+This command:
+1. Reads `.env` and process environment variables
+2. Resolves `NAVAI_FUNCTIONS_FOLDERS` and `NAVAI_ROUTES_FILE`
+3. Scans and selects matching modules
+4. Writes output to `src/ai/generated-module-loaders.ts`
+
+**Flags:**
+- `--project-root <path>` - Project root directory
+- `--src-root <path>` - Source code root directory
+- `--output-file <path>` - Output file path
+- `--env-file <path>` - Custom .env file path
+- `--default-functions-folder <path>` - Default functions folder
+- `--default-routes-file <path>` - Default routes file
+- `--type-import <module>` - Custom type import
+- `--export-name <identifier>` - Custom export name
+
+## Quick Start
+
+Use the React hook in your application:
+
+```typescript
+import { useWebVoiceAgent } from "@navai/voice-frontend";
+import { NAVAI_WEB_MODULE_LOADERS } from "./ai/generated-module-loaders";
+import { NAVAI_ROUTE_ITEMS } from "./ai/routes";
+import { useNavigate } from "react-router-dom";
+
+function VoiceAssistant() {
+  const navigate = useNavigate();
+  
+  const voice = useWebVoiceAgent({
+    navigate: (path) => navigate(path),
+    moduleLoaders: NAVAI_WEB_MODULE_LOADERS,
+    defaultRoutes: NAVAI_ROUTE_ITEMS,
+    env: import.meta.env as Record<string, string | undefined>
+  });
+
+  return (
+    <div>
+      <button onClick={voice.start}>Start Voice Agent</button>
+      <button onClick={voice.stop}>Stop Voice Agent</button>
+      <p>Status: {voice.state}</p>
+    </div>
+  );
+}
+```
+
+## Verification
+
+Run the module loader generator to verify your setup:
+
+```bash
+npm run generate:module-loaders
+```
+
+Check that `src/ai/generated-module-loaders.ts` was created successfully. The file should export:
+
+```typescript
+export const NAVAI_WEB_MODULE_LOADERS: NavaiFunctionModuleLoaders = {
+  // ... your module loaders
+};
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Frontend Configuration" icon="gear" href="/guides/environment-variables">
+    Configure runtime options, routes, and function discovery
+  </Card>
+  <Card title="Frontend Tools" icon="wrench" href="/guides/web-integration">
+    Create local voice agent tools for your web application
+  </Card>
+  <Card title="Routes & Navigation" icon="route" href="/guides/route-configuration">
+    Set up route definitions for natural language navigation
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/frontend/overview">
+    Explore the full frontend API documentation
+  </Card>
+</CardGroup>
