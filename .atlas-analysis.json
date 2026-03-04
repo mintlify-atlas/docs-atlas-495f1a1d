@@ -1,0 +1,136 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "NAVAI",
+  "projectDescription": "Build voice-first experiences where an AI agent can understand natural speech, navigate your app's UI automatically, and execute frontend or backend functions in real time.",
+  "theme": "palm",
+  "primaryColor": "#1D9A6C",
+  "lightColor": "#0A66C2",
+  "darkColor": "#FF6B35",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/architecture",
+              "concepts/voice-interaction",
+              "concepts/function-execution",
+              "concepts/ui-navigation"
+            ]
+          },
+          {
+            "group": "Installation",
+            "pages": [
+              "installation/backend",
+              "installation/frontend",
+              "installation/mobile"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/backend-setup",
+              "guides/web-integration",
+              "guides/mobile-integration",
+              "guides/function-modules",
+              "guides/route-configuration",
+              "guides/environment-variables"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/express-backend",
+              "examples/react-app",
+              "examples/react-native-app",
+              "examples/custom-functions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Backend",
+            "pages": [
+              "api/backend/overview",
+              "api/backend/register-routes",
+              "api/backend/client-secret",
+              "api/backend/functions",
+              "api/backend/types"
+            ]
+          },
+          {
+            "group": "Frontend (Web)",
+            "pages": [
+              "api/frontend/overview",
+              "api/frontend/use-web-voice-agent",
+              "api/frontend/build-agent",
+              "api/frontend/backend-client",
+              "api/frontend/functions",
+              "api/frontend/routes",
+              "api/frontend/types"
+            ]
+          },
+          {
+            "group": "Mobile",
+            "pages": [
+              "api/mobile/overview",
+              "api/mobile/use-mobile-voice-agent",
+              "api/mobile/agent-runtime",
+              "api/mobile/backend-client",
+              "api/mobile/webrtc-transport",
+              "api/mobile/types"
+            ]
+          },
+          {
+            "group": "HTTP Routes",
+            "pages": [
+              "api/routes/client-secret",
+              "api/routes/functions-list",
+              "api/routes/functions-execute"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Voice-first UI navigation with natural language understanding",
+    "Real-time function execution (frontend and backend)",
+    "OpenAI Realtime API integration with secure ephemeral credentials",
+    "Dynamic function discovery and loading from codebase",
+    "Cross-platform support (Web, React Native, Expo)",
+    "Type-safe TypeScript SDK with React hooks",
+    "Flexible backend integration (Express or custom routes)",
+    "Route-aware navigation tools for voice-controlled apps"
+  ],
+  "publicApiSurface": [
+    "@navai/voice-backend: registerNavaiExpressRoutes",
+    "@navai/voice-backend: createRealtimeClientSecret",
+    "@navai/voice-backend: getNavaiVoiceBackendOptionsFromEnv",
+    "@navai/voice-backend: loadNavaiFunctions",
+    "@navai/voice-backend: resolveNavaiBackendRuntimeConfig",
+    "@navai/voice-frontend: useWebVoiceAgent",
+    "@navai/voice-frontend: buildNavaiAgent",
+    "@navai/voice-frontend: createNavaiBackendClient",
+    "@navai/voice-frontend: loadNavaiFunctions",
+    "@navai/voice-frontend: resolveNavaiFrontendRuntimeConfig",
+    "@navai/voice-frontend: resolveNavaiRoute",
+    "@navai/voice-mobile: useMobileVoiceAgent",
+    "@navai/voice-mobile: createNavaiMobileAgentRuntime",
+    "@navai/voice-mobile: createNavaiMobileBackendClient",
+    "@navai/voice-mobile: createReactNativeWebRtcTransport",
+    "@navai/voice-mobile: createNavaiMobileVoiceSession"
+  ]
+}
